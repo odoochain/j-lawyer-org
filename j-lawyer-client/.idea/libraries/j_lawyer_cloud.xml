@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="j-lawyer-cloud">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/j-lawyer-cloud/j-lawyer-cloud.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module org.jetbrains.idea.maven.project.MavenProjectsManager.isMavenModule="true" type="JAVA_MODULE" version="4">
+  <component name="FacetManager">
+    <facet type="jpa" name="JPA">
+      <configuration>
+        <setting name="validation-enabled" value="true" />
+        <datasource-mapping />
+        <naming-strategy-map />
+      </configuration>
+    </facet>
+  </component>
+  <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_12">
+    <output url="file://$MODULE_DIR$/target/classes" />
+    <output-test url="file://$MODULE_DIR$/target/test-classes" />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/test" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/src/main/java" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/main/resources" type="java-resource" />
+      <sourceFolder url="file://$MODULE_DIR$/src/test/java" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="javax.ws.rs-api-2.0" level="project" />
+    <orderEntry type="library" name="j-lawyer-client" level="project" />
+    <orderEntry type="library" name="javaee-api-6.0" level="project" />
+    <orderEntry type="library" name="junit_4" level="project" />
+    <orderEntry type="library" name="bea" level="project" />
+    <orderEntry type="library" name="restlib" level="project" />
+    <orderEntry type="library" name="bizcal" level="project" />
+    <orderEntry type="library" name="j-lawyer-cloud" level="project" />
+    <orderEntry type="library" name="lib1" level="project" />
+    <orderEntry type="library" name="hamcrest-core-1.3" level="project" />
+    <orderEntry type="library" name="org-netbeans-modules-java-j2seproject-copylibstask1" level="project" />
+    <orderEntry type="library" name="beans-binding" level="project" />
+    <orderEntry type="library" name="swing-layout" level="project" />
+    <orderEntry type="library" name="org-netbeans-modules-java-j2seproject-copylibstask" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-controls:12.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-controls:win:12.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-graphics:12.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-graphics:win:12.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-fxml:12.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-fxml:win:12.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-media:12.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-media:win:12.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-swing:12.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-swing:win:12.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.kordamp.ikonli:ikonli-javafx:11.5.0" level="project" />
+    <orderEntry type="library" name="Maven: org.kordamp.ikonli:ikonli-core:11.5.0" level="project" />
+    <orderEntry type="library" name="Maven: org.kordamp.ikonli:ikonli-typicons-pack:11.5.0" level="project" />
+    <orderEntry type="library" name="Maven: org.kordamp.ikonli:ikonli-fontawesome-pack:11.5.0" level="project" />
+    <orderEntry type="library" name="Maven: org.kordamp.ikonli:ikonli-material-pack:11.5.0" level="project" />
+    <orderEntry type="library" name="Maven: org.kordamp.ikonli:ikonli-fontawesome5-pack:11.5.0" level="project" />
+    <orderEntry type="library" name="Maven: org.kordamp.ikonli:ikonli-runestroicons-pack:11.5.0" level="project" />
+    <orderEntry type="library" name="Maven: org.kordamp.ikonli:ikonli-icomoon-pack:11.5.0" level="project" />
+    <orderEntry type="library" name="Maven: com.github.imcdonagh:image4j:0.7.2" level="project" />
+    <orderEntry type="library" name="Maven: com.teamdev.jxbrowser:jxbrowser-win32:6.23.1" level="project" />
+    <orderEntry type="library" name="Maven: com.teamdev.jxbrowser:jxbrowser:6.23.1" level="project" />
+    <orderEntry type="library" name="Maven: com.teamdev.jxbrowser:jxbrowser-win64:6.23.1" level="project" />
+    <orderEntry type="library" name="Maven: com.teamdev.jxbrowser:jxbrowser-linux64:6.23.1" level="project" />
+    <orderEntry type="library" name="Maven: com.teamdev.jxbrowser:jxbrowser-mac:6.23.1" level="project" />
+    <orderEntry type="library" name="Maven: org.controlsfx:controlsfx:11.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-base:11.0.2" level="project" />
+    <orderEntry type="library" name="Maven: org.openjfx:javafx-base:win:11.0.2" level="project" />
+    <orderEntry type="library" name="Maven: com.jfoenix:jfoenix:9.0.9" level="project" />
+    <orderEntry type="library" name="Maven: org.fxmisc.richtext:richtextfx:0.10.1" level="project" />
+    <orderEntry type="library" name="Maven: org.reactfx:reactfx:2.0-M5" level="project" />
+    <orderEntry type="library" name="Maven: org.fxmisc.undo:undofx:2.1.0" level="project" />
+    <orderEntry type="library" name="Maven: org.fxmisc.flowless:flowless:0.6" level="project" />
+    <orderEntry type="library" name="Maven: org.fxmisc.wellbehaved:wellbehavedfx:0.3.3" level="project" />
+    <orderEntry type="library" name="Maven: com.1stleg:jnativehook:2.1.0" level="project" />
+    <orderEntry type="library" name="Maven: org.xerial:sqlite-jdbc:3.28.0" level="project" />
+    <orderEntry type="library" name="Maven: commons-io:commons-io:2.6" level="project" />
+    <orderEntry type="library" name="Maven: commons-validator:commons-validator:1.6" level="project" />
+    <orderEntry type="library" name="Maven: org.jsoup:jsoup:1.12.1" level="project" />
+    <orderEntry type="library" name="Maven: org.json:json:20180130" level="project" />
+    <orderEntry type="library" name="Maven: com.github.goxr3plus:java-google-speech-api:8.0.0" level="project" />
+    <orderEntry type="library" name="Maven: com.github.axet:java-flac-encoder:0.3.8" level="project" />
+    <orderEntry type="library" name="Maven: com.mpatric:mp3agic:0.9.1" level="project" />
+    <orderEntry type="library" name="Maven: com.github.goxr3plus:java-stream-player:10.0.0" level="project" />
+    <orderEntry type="library" name="Maven: com.googlecode.soundlibs:mp3spi:1.9.5.4" level="project" />
+    <orderEntry type="library" name="Maven: com.googlecode.soundlibs:jlayer:1.0.1.4" level="project" />
+    <orderEntry type="library" name="Maven: junit:junit:3.8.2" level="project" />
+    <orderEntry type="library" name="Maven: org.jflac:jflac-codec:1.5.2" level="project" />
+    <orderEntry type="library" name="Maven: com.github.trilarion:vorbis-support:1.1.0" level="project" />
+    <orderEntry type="library" name="Maven: com.googlecode.soundlibs:tritonus-all:0.3.7.2" level="project" />
+    <orderEntry type="library" name="Maven: com.googlecode.soundlibs:jorbis:0.0.17-2" level="project" />
+    <orderEntry type="library" name="Maven: com.github.goxr3plus:jaudiotagger:2.2.7" level="project" />
+    <orderEntry type="library" name="Maven: com.github.goxr3plus:FX-BorderlessScene:4.4.0" level="project" />
+    <orderEntry type="library" name="Maven: net.java.dev.jna:jna:5.3.1" level="project" />
+    <orderEntry type="library" name="Maven: net.java.dev.jna:jna-platform:5.3.1" level="project" />
+    <orderEntry type="library" name="Maven: com.dropbox.core:dropbox-core-sdk:3.1.1" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-core:2.7.4" level="project" />
+    <orderEntry type="library" name="Maven: org.atteo:evo-inflector:1.2.2" level="project" />
+    <orderEntry type="library" name="Maven: ws.schild:jave-core:2.6.0" level="project" />
+    <orderEntry type="library" name="Maven: org.slf4j:slf4j-api:1.7.26" level="project" />
+    <orderEntry type="library" name="Maven: ws.schild:jave-nativebin-win64:2.6.0" level="project" />
+    <orderEntry type="library" name="Maven: com.github.goxr3plus:javasysmon2:8.0.0" level="project" />
+    <orderEntry type="library" name="Maven: org.zeroturnaround:zt-zip:1.13" level="project" />
+    <orderEntry type="library" scope="TEST" name="Maven: org.junit.jupiter:junit-jupiter-api:5.4.2" level="project" />
+    <orderEntry type="library" scope="TEST" name="Maven: org.apiguardian:apiguardian-api:1.0.0" level="project" />
+    <orderEntry type="library" scope="TEST" name="Maven: org.opentest4j:opentest4j:1.1.1" level="project" />
+    <orderEntry type="library" scope="TEST" name="Maven: org.junit.platform:junit-platform-commons:1.4.2" level="project" />
+    <orderEntry type="library" scope="TEST" name="Maven: org.junit.jupiter:junit-jupiter-engine:5.4.2" level="project" />
+    <orderEntry type="library" scope="TEST" name="Maven: org.junit.platform:junit-platform-engine:1.4.2" level="project" />
+    <orderEntry type="library" scope="TEST" name="Maven: org.junit.jupiter:junit-jupiter-params:5.4.2" level="project" />
+    <orderEntry type="library" name="Maven: javax:javaee-api:7.0" level="project" />
+    <orderEntry type="library" name="Maven: com.sun.mail:javax.mail:1.5.0" level="project" />
+    <orderEntry type="library" name="Maven: javax.activation:activation:1.1" level="project" />
+  </component>
+</module>

@@ -1,0 +1,17 @@
+<component name="libraryTable">
+  <library name="bizcal">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/bizcal/TableLayout.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/bizcal/ecs.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/bizcal/bizcal-0.0.6.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/bizcal/lu.tudor.santec.i18n.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/bizcal/forms-1.0.6.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/bizcal/ical4j-1.0-beta3.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/bizcal/ical4j-0.9.18.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/bizcal/bizcalDemoApplication.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/bizcal/ecs-1.4.2.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
