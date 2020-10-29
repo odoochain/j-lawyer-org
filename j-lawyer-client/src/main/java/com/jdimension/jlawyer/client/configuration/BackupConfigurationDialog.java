@@ -858,7 +858,7 @@ public class BackupConfigurationDialog extends javax.swing.JDialog {
         jLabel13.setText("Passwort:");
 
         jLabel14.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/info.png"))); // NOI18N
-        jLabel14.setToolTipText("bei Angabe eines Passwortes wird die Datensicherung verschlüsselt und passwortgeschützt");
+        jLabel14.setToolTipText("If a password is specified, the data backup is encrypted and password-protected");
 
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
