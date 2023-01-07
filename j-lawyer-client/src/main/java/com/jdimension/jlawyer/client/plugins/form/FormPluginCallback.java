@@ -666,12 +666,14 @@ package com.jdimension.jlawyer.client.plugins.form;
 import com.jdimension.jlawyer.client.editors.EditorsRegistry;
 import com.jdimension.jlawyer.client.editors.files.ArchiveFilePanel;
 import com.jdimension.jlawyer.client.editors.files.EditArchiveFileDetailsPanel;
+import com.jdimension.jlawyer.client.plugins.calculation.GenericCalculationCallback;
 import com.jdimension.jlawyer.client.utils.FrameUtils;
 import com.jdimension.jlawyer.persistence.ArchiveFileBean;
 import java.awt.Container;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.InputStream;
@@ -702,9 +704,21 @@ public class FormPluginCallback {
     }
     
     public void processResultToClipboard(Object r) {
+        this.processResultToClipboardAsHtml(r);
+    }
+    
+    public void processResultToClipboardAsHtml(Object r) {
         System.out.println("received result: " + r.toString());
 
         HtmlSelection stsel = new HtmlSelection(r.toString());
+        Clipboard system = Toolkit.getDefaultToolkit().getSystemClipboard();
+        system.setContents(stsel, null);
+    }
+    
+    public void processResultToClipboardAsText(Object r) {
+        System.out.println("received result: " + r.toString());
+
+        StringSelection stsel = new StringSelection(r.toString());
         Clipboard system = Toolkit.getDefaultToolkit().getSystemClipboard();
         system.setContents(stsel, null);
     }
@@ -723,9 +737,29 @@ public class FormPluginCallback {
 
             } catch (Exception ex) {
                 log.error("Error creating editor from class " + EditArchiveFileDetailsPanel.class.getName(), ex);
-                JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Laden des Editors: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Laden des Editors: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             }
         }
+    }
+    
+    public void downloadFilesToCase(String urlList) {
+        // urlList has this format: "[http://legalh.de/20180329.pdf, http://legalh.de/20180329.pdf, http://legalh.de/20180329.pdf]"
+        String[] urls=urlList.split(",");
+        ArrayList<String> downloadUrls=new ArrayList<>();
+        for(String u: urls) {
+            u=u.replace('[', ' ');
+            u=u.replace(']', ' ');
+            u=u.trim();
+            if(!u.isBlank())
+                downloadUrls.add(u);
+        }
+        if(!downloadUrls.isEmpty()) {
+            FormFileDownloadDialog downDia=new FormFileDownloadDialog(EditorsRegistry.getInstance().getMainWindow(), true, this.getCaseId(), downloadUrls);
+            downDia.setSize(800, 650);
+            FrameUtils.centerDialog(downDia, EditorsRegistry.getInstance().getMainWindow());
+            downDia.setVisible(true);
+        }
+        
     }
 
     private static class HtmlSelection implements Transferable {
@@ -744,7 +778,7 @@ public class FormPluginCallback {
 
             } catch (ClassNotFoundException ex) {
 
-                ex.printStackTrace();
+                log.error(ex);
 
             }
 

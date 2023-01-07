@@ -716,13 +716,8 @@ public class LinuxNativeLauncher extends NativeLauncher {
                         throw new Exception("Datei kann nicht geöffnet werden: Desktop API wird nicht unterstützt!");
                     }
                     odoc.setStatus(ObservedDocument.STATUS_MONITORING);
-                    if (store.isReadOnly()) {
-                        d.open(new File(url));
-                    } else {
-                        //d.edit(new File(url));
-                        d.open(new File(url));
-                    }
-
+                    d.open(new File(url));
+                    
                 } catch (final Exception ex) {
                     if (ex instanceof IOException) {
                         log.error("IOException opening file using Desktop API - falling back to xdg-open", ex);
@@ -750,7 +745,7 @@ public class LinuxNativeLauncher extends NativeLauncher {
                             SwingUtilities.invokeLater(new Runnable() {
 
                                 public void run() {
-                                    JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Öffnen des Dokuments: " + t.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                                    JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Öffnen des Dokuments: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                                 }
                             });
                         }
@@ -760,7 +755,7 @@ public class LinuxNativeLauncher extends NativeLauncher {
                         SwingUtilities.invokeLater(new Runnable() {
 
                             public void run() {
-                                JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Öffnen des Dokuments: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                                JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Öffnen des Dokuments: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                             }
                         });
                     }

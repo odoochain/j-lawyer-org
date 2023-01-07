@@ -663,28 +663,27 @@
  */
 package com.jdimension.jlawyer.client.editors.files;
 
+import com.jdimension.jlawyer.client.calendar.CalendarUtils;
 import com.jdimension.jlawyer.client.components.MultiCalDialog;
 import com.jdimension.jlawyer.client.configuration.OptionGroupListCellRenderer;
 import com.jdimension.jlawyer.client.configuration.UserListCellRenderer;
 import com.jdimension.jlawyer.client.editors.EditorsRegistry;
-import com.jdimension.jlawyer.client.launcher.LauncherFactory;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.client.settings.UserSettings;
 import com.jdimension.jlawyer.client.utils.ComponentUtils;
 import com.jdimension.jlawyer.client.utils.FileUtils;
-import com.jdimension.jlawyer.client.utils.FrameUtils;
-import com.jdimension.jlawyer.client.utils.PlaceHolderUtils;
 import com.jdimension.jlawyer.client.utils.StringUtils;
-import com.jdimension.jlawyer.client.utils.ThreadUtils;
-import com.jdimension.jlawyer.documents.PlaceHolders;
 import com.jdimension.jlawyer.persistence.*;
 import com.jdimension.jlawyer.services.ArchiveFileServiceRemote;
+import com.jdimension.jlawyer.services.CalendarServiceRemote;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
+import com.jdimension.jlawyer.ui.folders.CaseFolderPanel;
+import java.awt.event.KeyEvent;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import javax.swing.DefaultComboBoxModel;
 import javax.swing.JOptionPane;
 import javax.swing.JTable;
-import javax.swing.table.TableModel;
 import org.apache.log4j.Logger;
 
 /**
@@ -694,15 +693,21 @@ import org.apache.log4j.Logger;
 public class AddNoteDialog extends javax.swing.JDialog {
 
     private static final Logger log = Logger.getLogger(AddNoteDialog.class.getName());
-    private JTable targetTable = null;
+    private CaseFolderPanel targetTable = null;
     private ArchiveFileBean aFile = null;
     private boolean initializing = true;
     private JTable tblReviewReasons = null;
 
     /**
      * Creates new form AddNoteDialog
+     *
+     * @param parent
+     * @param modal
+     * @param targetTable
+     * @param aFile
+     * @param tblReviewReasons
      */
-    public AddNoteDialog(java.awt.Frame parent, boolean modal, JTable targetTable, ArchiveFileBean aFile, JTable tblReviewReasons) {
+    public AddNoteDialog(java.awt.Frame parent, boolean modal, CaseFolderPanel targetTable, ArchiveFileBean aFile, JTable tblReviewReasons) {
         super(parent, modal);
         this.initializing = true;
         this.targetTable = targetTable;
@@ -710,28 +715,28 @@ public class AddNoteDialog extends javax.swing.JDialog {
         this.aFile = aFile;
         initComponents();
 
+        this.quickDateSelectionPanel.setTarget(this.txtReviewDateField);
+
         SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd");
         this.txtFileName.setText(df.format(new Date()) + "_Notiz");
-        
-        SimpleDateFormat dtf = new SimpleDateFormat("dd.MM.yyyy HH:mm");
-        String html="  <table>\n" +
-"  <tr>\n" +
-"  <td>\n" +
-"  <b>" + this.aFile.getFileNumber() + " " + this.aFile.getName() + "<br/>\n" +
-"  Aktennotiz vom " + dtf.format(new Date()) + " Uhr<br/>\n" +
-"  Nutzer: " + UserSettings.getInstance().getCurrentUser().getPrincipalId() + "</b>\n" +
-"  </td>\n" +
-"  </tr>\n" +
-"</table>\n" +
-"<hr/>\n" +
-"<p>\n" +
-"  NOTIZTEXT\n" +
-"</p>";
-        this.htmlEditorPanel1.setText(html);
-        
-        
 
-        ClientSettings settings=ClientSettings.getInstance();
+        SimpleDateFormat dtf = new SimpleDateFormat("dd.MM.yyyy HH:mm");
+        String html = "  <table>\n"
+                + "  <tr>\n"
+                + "  <td>\n"
+                + "  <b>" + this.aFile.getFileNumber() + " " + this.aFile.getName() + "<br/>\n"
+                + "  Aktennotiz vom " + dtf.format(new Date()) + " Uhr<br/>\n"
+                + "  Nutzer: " + UserSettings.getInstance().getCurrentUser().getPrincipalId() + "</b>\n"
+                + "  </td>\n"
+                + "  </tr>\n"
+                + "</table>\n"
+                + "<hr/>\n"
+                + "<p>\n"
+                + "  \n"
+                + "</p>";
+        this.htmlEditorPanel1.setText(html);
+
+        ClientSettings settings = ClientSettings.getInstance();
         this.cmbReviewReason.setRenderer(new OptionGroupListCellRenderer());
         AppOptionGroupBean[] reviewReasons = settings.getReviewReasonDtos();
         String[] reviewReasonItems = new String[reviewReasons.length + 1];
@@ -739,47 +744,63 @@ public class AddNoteDialog extends javax.swing.JDialog {
         for (int i = 0; i < reviewReasons.length; i++) {
             AppOptionGroupBean aogb = (AppOptionGroupBean) reviewReasons[i];
             reviewReasonItems[i + 1] = aogb.getValue();
-            //reviewReasonItems[i+1]=reviewReasons[i];
         }
         StringUtils.sortIgnoreCase(reviewReasonItems);
         OptionsComboBoxModel reviewReasonModel = new OptionsComboBoxModel(reviewReasonItems);
         this.cmbReviewReason.setModel(reviewReasonModel);
 
-        AppUserBean[] allUsers = UserSettings.getInstance().getAllUsers();
-        Object[] allUserItems = new Object[allUsers.length + 1];
+        List<AppUserBean> allUsers = UserSettings.getInstance().getLoginEnabledUsers();
+        Object[] allUserItems = new Object[allUsers.size() + 1];
         allUserItems[0] = "";
-        for (int i = 0; i < allUsers.length; i++) {
-            AppUserBean aub = (AppUserBean) allUsers[i];
+        for (int i = 0; i < allUsers.size(); i++) {
+            AppUserBean aub = allUsers.get(i);
             allUserItems[i + 1] = aub.getPrincipalId();
         }
         OptionsComboBoxModel allUserModel = new OptionsComboBoxModel(allUserItems);
         this.cmbReviewAssignee.setModel(allUserModel);
         this.cmbReviewAssignee.setRenderer(new UserListCellRenderer());
-        
 
         ComponentUtils.restoreDialogSize(this);
-        
-        this.htmlEditorPanel1.requestFocus();
+
+        if (this.aFile.getAssistant() != null) {
+            this.cmbReviewAssignee.setSelectedItem(this.aFile.getAssistant());
+        }
+
+        DefaultComboBoxModel dm = new DefaultComboBoxModel();
+        dm.addElement("");
+        ArrayList<String> allTags = new ArrayList<>();
+        for (AppOptionGroupBean tag : settings.getArchiveFileTagDtos()) {
+            allTags.add(tag.getValue());
+        }
+        Collections.sort(allTags);
+        for (String s : allTags) {
+            dm.addElement(s);
+        }
+        this.cmbCaseTag.setModel(dm);
+
+        DefaultComboBoxModel dm2 = new DefaultComboBoxModel();
+        dm2.addElement("");
+        ArrayList<String> allTags2 = new ArrayList<>();
+        for (AppOptionGroupBean tag : settings.getDocumentTagDtos()) {
+            allTags2.add(tag.getValue());
+        }
+        Collections.sort(allTags2);
+        for (String s : allTags2) {
+            dm2.addElement(s);
+        }
+        this.cmbDocumentTag.setModel(dm2);
+
+        this.calendarSelectionButton1.refreshCalendarSetups();
+        this.calendarSelectionButton1.setEnabled(false);
+
         
         
         this.initializing = false;
-        
+
     }
     
-    private String getFileName(String templateName, Object client, Object opponent, Object other) {
-        String name="";
-        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd");
-        
-                String templateFileName = templateName;
-                if (templateFileName.lastIndexOf(".") >= 0) {
-                    templateFileName = templateFileName.substring(0, templateFileName.lastIndexOf("."));
-                }
-                //name=templateFileName + "_" + df.format(new Date());
-                name=df.format(new Date()) + "_" + templateFileName;
-                
-                
-        name=FileUtils.sanitizeFileName(name);
-        return name;
+    public void setFocusToBody() {
+        this.htmlEditorPanel1.requestFocus();
     }
 
     /**
@@ -806,7 +827,14 @@ public class AddNoteDialog extends javax.swing.JDialog {
         txtReviewDateField = new javax.swing.JTextField();
         cmbReviewAssignee = new javax.swing.JComboBox();
         radioReviewTypeNone = new javax.swing.JRadioButton();
+        quickDateSelectionPanel = new com.jdimension.jlawyer.client.components.QuickDateSelectionPanel();
+        calendarSelectionButton1 = new com.jdimension.jlawyer.client.calendar.CalendarSelectionButton();
         htmlEditorPanel1 = new com.jdimension.jlawyer.client.mail.HtmlEditorPanel();
+        jPanel1 = new javax.swing.JPanel();
+        chkCaseTagging = new javax.swing.JCheckBox();
+        cmbCaseTag = new javax.swing.JComboBox<>();
+        chkDocumentTagging = new javax.swing.JCheckBox();
+        cmbDocumentTag = new javax.swing.JComboBox<>();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
 
@@ -836,7 +864,7 @@ public class AddNoteDialog extends javax.swing.JDialog {
             }
         });
 
-        jLabel1.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        jLabel1.setFont(jLabel1.getFont().deriveFont(jLabel1.getFont().getSize()+2f));
         jLabel1.setForeground(new java.awt.Color(255, 255, 255));
         jLabel1.setText("Notiz:");
 
@@ -900,7 +928,13 @@ public class AddNoteDialog extends javax.swing.JDialog {
 
         txtReviewDateField.setEditable(false);
         txtReviewDateField.setHorizontalAlignment(javax.swing.JTextField.RIGHT);
+        txtReviewDateField.setToolTipText("Doppelklick um heutiges Datum zu übernehmen");
         txtReviewDateField.setEnabled(false);
+        txtReviewDateField.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                txtReviewDateFieldMouseClicked(evt);
+            }
+        });
 
         cmbReviewAssignee.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
         cmbReviewAssignee.setEnabled(false);
@@ -923,33 +957,39 @@ public class AddNoteDialog extends javax.swing.JDialog {
                 .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(cmbReviewReason, 0, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .add(jPanel4Layout.createSequentialGroup()
-                        .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(jLabel12)
-                            .add(jLabel8))
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(jPanel4Layout.createSequentialGroup()
-                                .add(txtReviewDateField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 135, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                                .add(cmdShowReviewSelector)
-                                .add(0, 0, Short.MAX_VALUE))
-                            .add(cmbReviewAssignee, 0, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
-                    .add(jPanel4Layout.createSequentialGroup()
                         .add(radioReviewTypeNone)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
                         .add(radioReviewTypeFollowUp)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
                         .add(radioReviewTypeRespite)
-                        .add(0, 0, Short.MAX_VALUE)))
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
+                        .add(calendarSelectionButton1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                        .add(0, 0, Short.MAX_VALUE))
+                    .add(jPanel4Layout.createSequentialGroup()
+                        .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(jLabel12)
+                            .add(jLabel8))
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(cmbReviewAssignee, 0, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .add(jPanel4Layout.createSequentialGroup()
+                                .add(txtReviewDateField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 135, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                                .add(cmdShowReviewSelector)
+                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                                .add(quickDateSelectionPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                                .add(0, 0, Short.MAX_VALUE)))))
                 .addContainerGap())
         );
         jPanel4Layout.setVerticalGroup(
             jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(org.jdesktop.layout.GroupLayout.TRAILING, jPanel4Layout.createSequentialGroup()
-                .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(radioReviewTypeFollowUp)
-                    .add(radioReviewTypeRespite)
-                    .add(radioReviewTypeNone))
+                .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                        .add(radioReviewTypeFollowUp)
+                        .add(radioReviewTypeRespite)
+                        .add(radioReviewTypeNone))
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, calendarSelectionButton1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(cmbReviewReason, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .add(7, 7, 7)
@@ -961,62 +1001,96 @@ public class AddNoteDialog extends javax.swing.JDialog {
                     .add(cmdShowReviewSelector)
                     .add(jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                         .add(txtReviewDateField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                        .add(jLabel8)))
-                .addContainerGap(13, Short.MAX_VALUE))
+                        .add(jLabel8))
+                    .add(quickDateSelectionPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        );
+
+        jPanel1.setBorder(javax.swing.BorderFactory.createTitledBorder("Etikett anbringen"));
+
+        chkCaseTagging.setText("Aktenetikett:");
+
+        cmbCaseTag.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
+
+        chkDocumentTagging.setText("Dokumentetikett:");
+
+        cmbDocumentTag.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
+
+        org.jdesktop.layout.GroupLayout jPanel1Layout = new org.jdesktop.layout.GroupLayout(jPanel1);
+        jPanel1.setLayout(jPanel1Layout);
+        jPanel1Layout.setHorizontalGroup(
+            jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel1Layout.createSequentialGroup()
+                .addContainerGap()
+                .add(jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(chkDocumentTagging)
+                    .add(chkCaseTagging))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(cmbCaseTag, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                    .add(cmbDocumentTag, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        );
+        jPanel1Layout.setVerticalGroup(
+            jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel1Layout.createSequentialGroup()
+                .add(jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(chkCaseTagging)
+                    .add(cmbCaseTag, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(chkDocumentTagging)
+                    .add(cmbDocumentTag, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
         );
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel2, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
             .add(layout.createSequentialGroup()
                 .addContainerGap()
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
-                    .add(layout.createSequentialGroup()
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(jPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .add(jPanel4, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, htmlEditorPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 956, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
+                        .add(0, 0, Short.MAX_VALUE)
                         .add(cmdAddDocument)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(cmdCancel))
-                    .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING, false)
-                        .add(htmlEditorPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .add(jPanel4, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
-                .addContainerGap(52, Short.MAX_VALUE))
-            .add(jPanel2, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .add(cmdCancel)))
+                .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
                 .add(jPanel2, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(htmlEditorPanel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 311, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
+                .add(htmlEditorPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 243, Short.MAX_VALUE)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(jPanel4, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(jPanel1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(cmdCancel)
                     .add(cmdAddDocument))
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap())
         );
 
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
     private void cmdCancelActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdCancelActionPerformed
+        if (this.htmlEditorPanel1.getText().length() > 200) {
+            int response = JOptionPane.showConfirmDialog(this, "Notiz verwerfen und Dialog schliessen?", "Notiz verwerfen", JOptionPane.YES_NO_OPTION);
+            if (response == JOptionPane.NO_OPTION) {
+                return;
+            }
+        }
         this.setVisible(false);
         this.dispose();
     }//GEN-LAST:event_cmdCancelActionPerformed
-
-    private boolean hasFileExtension(String s) {
-        if (s == null) {
-            return false;
-        }
-        s = s.toLowerCase();
-        for (String ext : LauncherFactory.LO_OFFICEFILETYPES) {
-            if (s.endsWith(ext.toLowerCase())) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     private void cmdAddDocumentActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdAddDocumentActionPerformed
 
@@ -1024,16 +1098,44 @@ public class AddNoteDialog extends javax.swing.JDialog {
             JOptionPane.showMessageDialog(this, "Bitte geben Sie einen Dateinamen ohne Erweiterung ein.", "Dokument erstellen", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        
-        String fileName=this.txtFileName.getText();
-        
-        if(!fileName.toLowerCase().endsWith(".html"))
-            fileName=fileName + ".html";
+
+        String fileName = this.txtFileName.getText();
+
+        if (!fileName.toLowerCase().endsWith(".html")) {
+            fileName = fileName + ".html";
+        }
 
         ClientSettings settings = ClientSettings.getInstance();
+        EditorsRegistry.getInstance().updateStatus("Erstelle Dokument...");
+        try {
+            JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+            ArchiveFileServiceRemote afs = locator.lookupArchiveFileServiceRemote();
+            ArchiveFileDocumentsBean db = afs.addDocument(this.aFile.getId(), FileUtils.sanitizeFileName(fileName), this.htmlEditorPanel1.getText().getBytes(), "");
+            this.targetTable.addDocument(db);
+
+            if (this.chkCaseTagging.isSelected()) {
+                Object caseTag = this.cmbCaseTag.getSelectedItem();
+                if (caseTag != null && !"".equals(caseTag)) {
+                    afs.setTag(this.aFile.getId(), new ArchiveFileTagsBean(null, caseTag.toString()), true);
+                }
+            }
+
+            if (this.chkDocumentTagging.isSelected()) {
+                Object docTag = this.cmbDocumentTag.getSelectedItem();
+                if (docTag != null && !"".equals(docTag)) {
+                    afs.setDocumentTag(db.getId(), new DocumentTagsBean(null, docTag.toString()), true);
+                }
+            }
+
+        } catch (Exception ex) {
+            log.error("Error adding note", ex);
+            JOptionPane.showMessageDialog(this, "Fehler beim Hinzufügen der Notiz: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+            EditorsRegistry.getInstance().clearStatus();
+            return;
+        }
 
         if (!(this.radioReviewTypeNone.isSelected())) {
-            if(this.txtReviewDateField.getText().length() != 10) {
+            if (this.txtReviewDateField.getText().length() != 10) {
                 JOptionPane.showMessageDialog(this, "Wiedervorlagedatum ungültig", "Dokument erstellen", JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
@@ -1047,70 +1149,48 @@ public class AddNoteDialog extends javax.swing.JDialog {
             }
 
             ArchiveFileReviewsBean reviewDto = new ArchiveFileReviewsBean();
-            reviewDto.setReviewType(reviewDto.REVIEWTYPE_FOLLOWUP);
+            reviewDto.setEventType(ArchiveFileReviewsBean.EVENTTYPE_FOLLOWUP);
             if (this.radioReviewTypeRespite.isSelected()) {
-                reviewDto.setReviewType(reviewDto.REVIEWTYPE_RESPITE);
+                reviewDto.setEventType(ArchiveFileReviewsBean.EVENTTYPE_RESPITE);
             }
             reviewDto.setDoneBoolean(false);
-            reviewDto.setReviewDate(d);
+            reviewDto.setBeginDate(d);
             reviewDto.setAssignee(this.cmbReviewAssignee.getSelectedItem().toString());
-            reviewDto.setReviewReason(this.cmbReviewReason.getModel().getSelectedItem().toString());
+            reviewDto.setSummary(this.cmbReviewReason.getModel().getSelectedItem().toString());
+            reviewDto.setCalendarSetup(this.calendarSelectionButton1.getSelectedSetup());
 
-            EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist wird gespeichert...");
-            try {
-                JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-                ArchiveFileServiceRemote fileService = locator.lookupArchiveFileServiceRemote();
+            if (CalendarUtils.checkForConflicts(this, reviewDto)) {
+                EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist wird gespeichert...");
+                try {
+                    JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+                    CalendarServiceRemote calService = locator.lookupCalendarServiceRemote();
 
-                reviewDto = fileService.addReview(this.aFile.getId(), reviewDto);
-                EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist gespeichert.", 5000);
+                    reviewDto = calService.addReview(this.aFile.getId(), reviewDto);
+                    EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist gespeichert.", 5000);
 
-            } catch (Exception ex) {
-                log.error("Error adding review", ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Speichern der Wiedervorlage: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-                EditorsRegistry.getInstance().clearStatus();
-                return;
+                } catch (Exception ex) {
+                    log.error("Error adding review", ex);
+                    JOptionPane.showMessageDialog(this, "Fehler beim Speichern der Wiedervorlage: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+                    EditorsRegistry.getInstance().clearStatus();
+                    return;
+                }
+
+                ArchiveFileReviewReasonsTableModel model = (ArchiveFileReviewReasonsTableModel) this.tblReviewReasons.getModel();
+                Object[] row = ArchiveFileReviewReasonsTableModel.eventToRow(reviewDto);
+
+                model.addRow(row);
+                ComponentUtils.autoSizeColumns(tblReviewReasons);
             }
 
-            ArchiveFileReviewReasonsTableModel model = (ArchiveFileReviewReasonsTableModel) this.tblReviewReasons.getModel();
-            Object[] row = new Object[5];
-            row[0] = reviewDto;
-            row[1] = reviewDto.getReviewTypeName();
-            row[2] = reviewDto.getReviewReason();
-            row[3] = new Boolean(reviewDto.getDoneBoolean());
-            row[4] = reviewDto.getAssignee();
-            model.addRow(row);
-            ComponentUtils.autoSizeColumns(tblReviewReasons);
-
         }
-        
-        EditorsRegistry.getInstance().updateStatus("Erstelle Dokument...");
-        try {
-            //InitialContext context = new InitialContext(settings.getLookupProperties());
-            JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-            
-            ArchiveFileDocumentsBean db = locator.lookupArchiveFileServiceRemote().addDocument(this.aFile.getId(), FileUtils.sanitizeFileName(fileName), this.htmlEditorPanel1.getText().getBytes(), "");
-            ArchiveFileDocumentsTableModel m = (ArchiveFileDocumentsTableModel) this.targetTable.getModel();
-            //SimpleDateFormat df=new SimpleDateFormat("dd.MM.yyyy, HH:mm", Locale.GERMAN);
-            //m.addRow(new Object[] {df.format(db.getCreationDate()), db.getName()});
-            m.addRow(new Object[]{db, false, db.getName(), db.getDictateSign()});
-            ComponentUtils.autoSizeColumns(targetTable);
 
-        } catch (Exception ex) {
-            log.error("Error adding note", ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Hinzufügen der Notiz: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            EditorsRegistry.getInstance().clearStatus();
-            return;
-        }
-        
-        
-        
         EditorsRegistry.getInstance().clearStatus();
         this.setVisible(false);
         this.dispose();
     }//GEN-LAST:event_cmdAddDocumentActionPerformed
 
     private void txtFileNameKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtFileNameKeyPressed
-        if (evt.getKeyCode() == evt.VK_ENTER) {
+        if (evt.getKeyCode() == KeyEvent.VK_ENTER) {
             this.cmdAddDocumentActionPerformed(null);
         }
     }//GEN-LAST:event_txtFileNameKeyPressed
@@ -1118,27 +1198,36 @@ public class AddNoteDialog extends javax.swing.JDialog {
     private void cmdShowReviewSelectorActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdShowReviewSelectorActionPerformed
 
         MultiCalDialog dlg = new MultiCalDialog(this.txtReviewDateField, this, true);
-        //dlg.setLocation(this.getX() + this.cmdShowReviewSelector.getX(), this.getY() + this.cmdShowReviewSelector.getY());
-        FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
         dlg.setVisible(true);
     }//GEN-LAST:event_cmdShowReviewSelectorActionPerformed
 
     private void radioReviewTypeNoneActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_radioReviewTypeNoneActionPerformed
         this.enableReviewElements(false);
+        this.calendarSelectionButton1.setEnabled(false);
     }//GEN-LAST:event_radioReviewTypeNoneActionPerformed
 
     private void radioReviewTypeFollowUpActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_radioReviewTypeFollowUpActionPerformed
         this.enableReviewElements(true);
+        this.calendarSelectionButton1.restrictToType(CalendarSetup.EVENTTYPE_FOLLOWUP);
+        this.calendarSelectionButton1.setEnabled(true);
     }//GEN-LAST:event_radioReviewTypeFollowUpActionPerformed
 
     private void radioReviewTypeRespiteActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_radioReviewTypeRespiteActionPerformed
         this.enableReviewElements(true);
-
+        this.calendarSelectionButton1.restrictToType(CalendarSetup.EVENTTYPE_RESPITE);
+        this.calendarSelectionButton1.setEnabled(true);
     }//GEN-LAST:event_radioReviewTypeRespiteActionPerformed
 
     private void formComponentResized(java.awt.event.ComponentEvent evt) {//GEN-FIRST:event_formComponentResized
         ComponentUtils.storeDialogSize(this);
     }//GEN-LAST:event_formComponentResized
+
+    private void txtReviewDateFieldMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_txtReviewDateFieldMouseClicked
+        if (evt.getClickCount() == 2) {
+            SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy");
+            this.txtReviewDateField.setText(df.format(new Date()));
+        }
+    }//GEN-LAST:event_txtReviewDateFieldMouseClicked
 
     private void enableReviewElements(boolean enable) {
         this.cmbReviewAssignee.setEnabled(enable);
@@ -1158,15 +1247,17 @@ public class AddNoteDialog extends javax.swing.JDialog {
      * @param args the command line arguments
      */
     public static void main(String args[]) {
-        java.awt.EventQueue.invokeLater(new Runnable() {
-
-            public void run() {
-                new AddNoteDialog(new javax.swing.JFrame(), true, null, null, null).setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            new AddNoteDialog(new javax.swing.JFrame(), true, null, null, null).setVisible(true);
         });
     }
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.ButtonGroup btGrpReviews;
+    private com.jdimension.jlawyer.client.calendar.CalendarSelectionButton calendarSelectionButton1;
+    private javax.swing.JCheckBox chkCaseTagging;
+    private javax.swing.JCheckBox chkDocumentTagging;
+    private javax.swing.JComboBox<String> cmbCaseTag;
+    private javax.swing.JComboBox<String> cmbDocumentTag;
     private javax.swing.JComboBox cmbReviewAssignee;
     private javax.swing.JComboBox cmbReviewReason;
     private javax.swing.JButton cmdAddDocument;
@@ -1176,8 +1267,10 @@ public class AddNoteDialog extends javax.swing.JDialog {
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel12;
     private javax.swing.JLabel jLabel8;
+    private javax.swing.JPanel jPanel1;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JPanel jPanel4;
+    private com.jdimension.jlawyer.client.components.QuickDateSelectionPanel quickDateSelectionPanel;
     private javax.swing.JRadioButton radioReviewTypeFollowUp;
     private javax.swing.JRadioButton radioReviewTypeNone;
     private javax.swing.JRadioButton radioReviewTypeRespite;

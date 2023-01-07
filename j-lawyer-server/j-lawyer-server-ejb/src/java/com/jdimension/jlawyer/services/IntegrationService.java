@@ -664,6 +664,11 @@
 package com.jdimension.jlawyer.services;
 
 import com.jdimension.jlawyer.email.EmailTemplate;
+import com.jdimension.jlawyer.events.CustomHooksServiceLocal;
+import com.jdimension.jlawyer.events.HookType;
+import com.jdimension.jlawyer.persistence.ArchiveFileDocumentsBean;
+import com.jdimension.jlawyer.persistence.IntegrationHook;
+import com.jdimension.jlawyer.persistence.IntegrationHookFacadeLocal;
 import com.jdimension.jlawyer.persistence.ServerSettingsBean;
 import com.jdimension.jlawyer.persistence.ServerSettingsBeanFacadeLocal;
 import com.jdimension.jlawyer.storage.VirtualFile;
@@ -671,15 +676,19 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.Reader;
 import java.io.StringWriter;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Hashtable;
+import java.util.List;
 import javax.annotation.security.DeclareRoles;
 import javax.annotation.security.RolesAllowed;
 import javax.ejb.EJB;
@@ -697,12 +706,16 @@ import org.jboss.ejb3.annotation.SecurityDomain;
 @SecurityDomain(value = "j-lawyer-security")
 public class IntegrationService implements IntegrationServiceRemote, IntegrationServiceLocal {
 
-    private static Logger log = Logger.getLogger(IntegrationService.class.getName());
+    private static final Logger log = Logger.getLogger(IntegrationService.class.getName());
 
     @EJB
     private ArchiveFileServiceRemote archiveFileService;
     @EJB
     private ServerSettingsBeanFacadeLocal settingsFacade;
+    @EJB
+    private IntegrationHookFacadeLocal hookFacade;
+    @EJB
+    private CustomHooksServiceLocal hookService;
 
     @Override
     @RolesAllowed(value = {"readArchiveFileRole"})
@@ -714,7 +727,6 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
             return new Hashtable();
         }
 
-        //String scanDir = System.getProperty("jlawyer.server.observe.directory");
         String scanDir = obs.getSettingValue();
         if (scanDir == null) {
             log.info("directory observation is switched off");
@@ -732,18 +744,17 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
             return new Hashtable();
         }
 
-        //ArrayList<String> fileNames = new ArrayList<String>();
-        Hashtable<File, Date> fileObjects = new Hashtable<File, Date>();
+        Hashtable<File, Date> fileObjects = new Hashtable<>();
         File files[] = scanDirectory.listFiles();
         if (files != null) {
             for (File f : files) {
                 if (!f.isDirectory()) {
-                    
+
                     if ((System.currentTimeMillis() - f.lastModified()) > 5000l) {
                         String name = f.getName();
                         fileObjects.put(f, new Date(f.lastModified()));
                     } else {
-                        
+
                         long size = f.length();
                         try {
                             Thread.sleep(300);
@@ -758,9 +769,7 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
                         }
 
                     }
-                    
-//                    String name = f.getName();
-//                    fileObjects.put(f, new Date(f.lastModified()));
+
                 }
             }
         } else {
@@ -769,8 +778,6 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
         return fileObjects;
     }
 
-    // Add business logic below. (Right-click in editor and choose
-    // "Insert Code > Add Business Method")
     @Override
     @RolesAllowed(value = {"readArchiveFileRole"})
     public boolean removeObservedFile(String fileName) {
@@ -780,7 +787,6 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
             return false;
         }
 
-        //String scanDir = System.getProperty("jlawyer.server.observe.directory");
         String scanDir = obs.getSettingValue();
         if (scanDir == null) {
             log.error("directory observation is switched off");
@@ -809,7 +815,7 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
 
     @Override
     @RolesAllowed(value = {"writeArchiveFileRole"})
-    public boolean assignObservedFile(String fileName, String archiveFileId) throws Exception {
+    public String assignObservedFile(String fileName, String archiveFileId) throws Exception {
         return assignObservedFile(fileName, archiveFileId, fileName);
     }
 
@@ -822,7 +828,6 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
             return null;
         }
 
-        //String scanDir = System.getProperty("jlawyer.server.observe.directory");
         String scanDir = obs.getSettingValue();
         if (scanDir == null) {
             log.error("directory observation is switched off");
@@ -851,18 +856,21 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
 
     @Override
     @RolesAllowed(value = {"writeArchiveFileRole"})
-    public boolean assignObservedFile(String fileName, String archiveFileId, String renameTo) throws Exception {
+    public String assignObservedFile(String fileName, String archiveFileId, String renameTo) throws Exception {
+        
+        if(fileName==null || "".equals(fileName))
+            throw new Exception("Dokumentname darf nicht leer sein!");
+        
         ServerSettingsBean obs = this.settingsFacade.find("jlawyer.server.observe.directory");
         if (obs == null) {
             log.error("directory observation is switched off");
-            return false;
+            return null;
         }
 
-        //String scanDir = System.getProperty("jlawyer.server.observe.directory");
         String scanDir = obs.getSettingValue();
         if (scanDir == null) {
             log.error("directory observation is switched off");
-            return false;
+            return null;
         }
 
         if (renameTo == null || "".equalsIgnoreCase(renameTo)) {
@@ -872,22 +880,21 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
         File scanDirectory = new File(scanDir);
         if (!scanDirectory.exists() && scanDirectory.isDirectory()) {
             log.error("observed directory does not exist / is not a directory");
-            return false;
+            return null;
         }
 
-        File files[] = scanDirectory.listFiles();
+        File[] files = scanDirectory.listFiles();
         for (File f : files) {
             if (!f.isDirectory()) {
                 String name = f.getName();
                 if (name.equals(fileName)) {
-                    //f.delete();
                     byte[] data = SystemManagement.readFile(f);
-                    this.archiveFileService.addDocument(archiveFileId, renameTo, data, "");
-                    return true;
+                    ArchiveFileDocumentsBean d=this.archiveFileService.addDocument(archiveFileId, renameTo, data, "");
+                    return d.getId();
                 }
             }
         }
-        return false;
+        return null;
     }
 
     @Override
@@ -928,9 +935,9 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
             throw new Exception("Datei existiert bereits: " + template.getFileName());
         }
 
-        FileWriter fw = new FileWriter(f);
-        fw.write(template.toXML());
-        fw.close();
+        try (FileWriter fw = new FileWriter(f)) {
+            fw.write(template.toXML());
+        }
     }
 
     @Override
@@ -964,14 +971,15 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
 
         File f = new File(localBaseDir + fileName);
         if (f.exists()) {
-            FileReader fr = new FileReader(f);
-            char[] buffer = new char[1024];
-            int len = 0;
-            StringBuffer sb = new StringBuffer();
-            while ((len = fr.read(buffer)) > -1) {
-                sb.append(buffer, 0, len);
+            StringBuilder sb = new StringBuilder();
+            try (FileReader fr = new FileReader(f)) {
+                char[] buffer = new char[1024];
+                int len = 0;
+                
+                while ((len = fr.read(buffer)) > -1) {
+                    sb.append(buffer, 0, len);
+                }
             }
-            fr.close();
             EmailTemplate tpl = EmailTemplate.fromXML(sb.toString());
             tpl.setFileName(fileName);
             return tpl;
@@ -988,20 +996,21 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
         }
 
         Tika tika = new Tika();
+        String result = null;
         try {
-            Reader r = tika.parse(new ByteArrayInputStream(data));
-            BufferedReader br = new BufferedReader(r);
-            StringWriter sw = new StringWriter();
-            BufferedWriter bw = new BufferedWriter(sw);
-            char[] buffer = new char[1024];
-            int bytesRead = -1;
-            while ((bytesRead = br.read(buffer)) > -1) {
-                bw.write(buffer, 0, bytesRead);
+            try (Reader r = tika.parse(new ByteArrayInputStream(data));
+                    BufferedReader br = new BufferedReader(r);
+                    StringWriter sw = new StringWriter();
+                    BufferedWriter bw = new BufferedWriter(sw)) {
+                char[] buffer = new char[1024];
+                int bytesRead = -1;
+                while ((bytesRead = br.read(buffer)) > -1) {
+                    bw.write(buffer, 0, bytesRead);
+                }
+                result = sw.toString();
             }
-            bw.close();
-            br.close();
 
-            return sw.toString();
+            return result;
 
         } catch (Throwable t) {
             log.error("Error creating document preview", t);
@@ -1031,6 +1040,135 @@ public class IntegrationService implements IntegrationServiceRemote, Integration
             throw new Exception(t.getMessage());
         }
 
+    }
+
+    @Override
+    @RolesAllowed(value = {"loginRole"})
+    public String[] getHookTypes() {
+        HookType[] types=HookType.values();
+        String[] typeNames=new String[types.length];
+        for(int i=0;i<types.length;i++) {
+            typeNames[i]=types[i].name();
+        }
+        Arrays.sort(typeNames);
+        return typeNames;
+    }
+
+    @Override
+    @RolesAllowed(value = {"adminRole"})
+    public List<IntegrationHook> getAllIntegrationHooks() throws Exception {
+        return this.hookFacade.findAll();
+    }
+
+    @Override
+    @RolesAllowed(value = {"adminRole"})
+    public IntegrationHook addIntegrationHook(IntegrationHook hook) throws Exception {
+        this.hookFacade.create(hook);
+        this.hookService.resetCache();
+        return hook;
+    }
+
+    @Override
+    @RolesAllowed(value = {"adminRole"})
+    public IntegrationHook updateIntegrationHook(IntegrationHook hook) throws Exception {
+        this.hookFacade.edit(hook);
+        this.hookService.resetCache();
+        return hook;
+    }
+
+    @Override
+    @RolesAllowed(value = {"adminRole"})
+    public void removeIntegrationHook(IntegrationHook hook) throws Exception {
+        this.hookFacade.remove(hook);
+        this.hookService.resetCache();
+    }
+
+    @Override
+    @RolesAllowed(value = {"readArchiveFileRole"})
+    public boolean renameObservedFile(String fromName, String toName) throws Exception {
+        ServerSettingsBean obs = this.settingsFacade.find("jlawyer.server.observe.directory");
+        if (obs == null) {
+            log.info("directory observation is switched off");
+            return false;
+        }
+
+        String scanDir = obs.getSettingValue();
+        if (scanDir == null) {
+            log.error("directory observation is switched off");
+            return false;
+        }
+
+        File scanDirectory = new File(scanDir);
+        if (!scanDirectory.exists() && scanDirectory.isDirectory()) {
+            log.error("observed directory does not exist / is not a directory");
+            return false;
+        }
+
+        File files[] = scanDirectory.listFiles();
+        for (File f : files) {
+            if (!f.isDirectory()) {
+                String name = f.getName();
+                if (name.equals(toName)) {
+                    throw new Exception("Datei '" + toName + "' existiert bereits!");
+                }
+            }
+        }
+        files= scanDirectory.listFiles();
+        for (File f : files) {
+            if (!f.isDirectory()) {
+                String name = f.getName();
+                if (name.equals(fromName)) {
+                    if(!scanDir.endsWith(File.separator))
+                        scanDir=scanDir+File.separator;
+                    File toFile=new File(scanDir + toName);
+                    return f.renameTo(toFile);
+                }
+            }
+        }
+        return false;
+    }
+
+    @Override
+    @RolesAllowed(value = {"loginRole"})
+    public boolean addObservedFile(String fileName, byte[] data) throws Exception {
+        
+        if(fileName==null || "".equals(fileName))
+            throw new Exception("Dokumentname darf nicht leer sein!");
+        
+        ServerSettingsBean obs = this.settingsFacade.find("jlawyer.server.observe.directory");
+        if (obs == null) {
+            log.info("directory observation is switched off");
+            return false;
+        }
+
+        String scanDir = obs.getSettingValue();
+        if (scanDir == null) {
+            log.error("directory observation is switched off");
+            return false;
+        }
+
+        File scanDirectory = new File(scanDir);
+        if (!scanDirectory.exists() && scanDirectory.isDirectory()) {
+            log.error("observed directory does not exist / is not a directory");
+            return false;
+        }
+
+        SimpleDateFormat df=new SimpleDateFormat("yyyy-MM-dd_HH-mm");
+        File files[] = scanDirectory.listFiles();
+        for (File f : files) {
+            if (!f.isDirectory()) {
+                String name = f.getName();
+                if (name.equals(fileName)) {
+                    fileName=df.format(new Date())+"_"+name;
+                }
+            }
+        }
+        if(!scanDir.endsWith(File.separator))
+            scanDir=scanDir+File.separator;
+        try (FileOutputStream fout = new FileOutputStream(scanDir + fileName)) {
+            fout.write(data);
+        }
+        return true;
     }
 
 }

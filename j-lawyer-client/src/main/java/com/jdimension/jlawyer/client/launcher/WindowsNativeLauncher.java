@@ -717,12 +717,7 @@ public class WindowsNativeLauncher extends NativeLauncher {
                     }
                     odoc.setStatus(ObservedDocument.STATUS_MONITORING);
                     long launched=System.currentTimeMillis();
-                    if (store.isReadOnly()) {
-                        d.open(new File(url));
-                    } else {
-                        //d.edit(new File(url));
-                        d.open(new File(url));
-                    }
+                    d.open(new File(url));
                     long launchDuration=System.currentTimeMillis()-launched;
                     if(launchDuration>30000)
                         odoc.setClosed(true);
@@ -733,7 +728,7 @@ public class WindowsNativeLauncher extends NativeLauncher {
                     SwingUtilities.invokeLater(new Runnable() {
 
                         public void run() {
-                            JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Öffnen des Dokuments: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                            JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Öffnen des Dokuments: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                         }
                     });
 

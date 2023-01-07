@@ -670,8 +670,6 @@ import java.io.ByteArrayInputStream;
 import javax.swing.ImageIcon;
 import org.apache.log4j.Logger;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageTree;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 
@@ -691,6 +689,8 @@ public class PdfImagePanel extends javax.swing.JPanel implements PreviewPanel {
 
     /**
      * Creates new form PlaintextPanel
+     * @param fileName
+     * @param content
      */
     public PdfImagePanel(String fileName, byte[] content) {
         initComponents();
@@ -715,12 +715,6 @@ public class PdfImagePanel extends javax.swing.JPanel implements PreviewPanel {
         lblCurrentPage = new javax.swing.JLabel();
         cmdFirstPage = new javax.swing.JButton();
         cmdLastPage = new javax.swing.JButton();
-
-        addComponentListener(new java.awt.event.ComponentAdapter() {
-            public void componentResized(java.awt.event.ComponentEvent evt) {
-                formComponentResized(evt);
-            }
-        });
 
         lblContent.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
         lblContent.setText("Lade...");
@@ -772,7 +766,7 @@ public class PdfImagePanel extends javax.swing.JPanel implements PreviewPanel {
                 .addComponent(cmdLastPage)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(lblCurrentPage)
-                .addContainerGap(102, Short.MAX_VALUE))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -785,26 +779,9 @@ public class PdfImagePanel extends javax.swing.JPanel implements PreviewPanel {
                         .addComponent(lblCurrentPage, javax.swing.GroupLayout.Alignment.TRAILING))
                     .addComponent(cmdLastPage))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 460, Short.MAX_VALUE))
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 22, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
-
-    private void formComponentResized(java.awt.event.ComponentEvent evt) {//GEN-FIRST:event_formComponentResized
-//        try {
-//        //int height=Math.max(this.getHeight(), 200);
-//        int height=Math.max(this.getHeight(), 200);
-//        float scaleFactor=(float)height/(float)this.orgImage.getHeight();
-//        int width=(int)((float)this.orgImage.getWidth()*scaleFactor);
-//        Image bi2=this.orgImage.getScaledInstance(width,height,Image.SCALE_SMOOTH);
-//        //this.jScrollPane1.setBounds(0,0,this.getWidth(),this.getHeight());
-//        //this.lblContent.setBounds(0,0,this.getWidth(),this.getHeight());
-//        ThreadUtils.updateLabelIcon(this.lblContent, new ImageIcon(bi2));
-//        
-//        } catch (Throwable t) {
-//            log.error("error rendering PDF preview", t);
-//            showStatus("Vorschau nicht verfügbar");
-//        }
-    }//GEN-LAST:event_formComponentResized
 
     private void cmdPageBackwardActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdPageBackwardActionPerformed
         this.currentPage = this.currentPage - 1;
@@ -849,18 +826,14 @@ public class PdfImagePanel extends javax.swing.JPanel implements PreviewPanel {
                 if (content.length > 5000000) {
                     log.info("Rendering large PDF " + this.fileName + " with " + content.length + " bytes.");
                 }
-                if (content.length > 15000000) {
-                    log.info("Skipping rendering of very large PDF " + this.fileName + " with " + content.length + " bytes.");
-                    this.showStatus("PDF-Dokument ist zu groß für eine Vorschau.");
-                    return;
-                }
+            } else {
+                log.info("PDF to render has no byte content (null)");
+                this.showStatus("Daten für die Vorschaudarstellung sind ungültig.");
+                return;
             }
                         
-            //File PDF_Path = new File("/home/jens/j-lawyer-vorlage.pdf");
-            //PDDocument inputPDF = PDDocument.load(PDF_Path);
             PDDocument inputPDF = PDDocument.load(new ByteArrayInputStream(content));
             PDFRenderer pdfRenderer = new PDFRenderer(inputPDF);
-            PDPageTree allPages = inputPDF.getDocumentCatalog().getPages();
 
             this.totalPages = inputPDF.getNumberOfPages();
 
@@ -884,23 +857,16 @@ public class PdfImagePanel extends javax.swing.JPanel implements PreviewPanel {
 
             this.lblCurrentPage.setText("Seite " + (page + 1) + "/" + this.totalPages);
 
-            PDPage testPage = (PDPage) inputPDF.getPage(page);
             this.orgImage = pdfRenderer.renderImageWithDPI(page, 100, ImageType.RGB);
-            //this.orgImage=testPage.convertToImage();
-            //int height=Math.max(this.getHeight(), 200);
-            int height = Math.max(this.getHeight(), 400);
+            
+            // need to subtract the height of the page navigation buttons, but
+            // the panel has not been layed out yet, so there is no height we could query
+            int height = Math.max(this.getHeight() - 55, 400);
+            
             float scaleFactor = (float) height / (float) this.orgImage.getHeight();
             int width = (int) ((float) this.orgImage.getWidth() * scaleFactor);
+            width=Math.min(width, this.getWidth());
             Image bi2 = this.orgImage.getScaledInstance(width, height, Image.SCALE_SMOOTH);
-            //label=new JLabel(new ImageIcon(bi2));
-            //label.setBounds(0,0,this.getWidth(),this.getHeight());
-            // this.jScrollPane1.add(label);
-            //this.add(label);
-            //this.lblContent.setIcon(new ImageIcon(bi2));
-
-            //PDFPagePanel pdfPanel = new PDFPagePanel();
-            //pdfPanel.setPage(testPage);
-            //this.jPanel1.add(pdfPanel);
             inputPDF.close();
 
             ThreadUtils.updateLabelIcon(this.lblContent, new ImageIcon(bi2));

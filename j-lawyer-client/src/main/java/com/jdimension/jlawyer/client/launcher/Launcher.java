@@ -663,8 +663,6 @@
  */
 package com.jdimension.jlawyer.client.launcher;
 
-import com.jdimension.jlawyer.persistence.ArchiveFileBean;
-import com.jdimension.jlawyer.persistence.ArchiveFileDocumentsBean;
 import org.apache.log4j.Logger;
 
 /**
@@ -695,14 +693,6 @@ public abstract class Launcher {
     public boolean isDocumentReadOnly(String documentIdentifier) {
         DocumentObserver observer = DocumentObserver.getInstance();
         return observer.isDocumentReadOnly(documentIdentifier);
-    }
-
-    protected String getExtension(String url) {
-        int index = url.lastIndexOf('.');
-        if (index > -1 && index < url.length()) {
-            return url.substring(index + 1);
-        }
-        return "url-with-no-extension";
     }
 
     /**

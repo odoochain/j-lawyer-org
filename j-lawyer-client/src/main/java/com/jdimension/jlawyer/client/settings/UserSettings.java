@@ -666,14 +666,14 @@ package com.jdimension.jlawyer.client.settings;
 import static com.jdimension.jlawyer.client.settings.UserSettings.USER_AVATAR;
 import com.jdimension.jlawyer.persistence.AppRoleBean;
 import com.jdimension.jlawyer.persistence.AppUserBean;
+import com.jdimension.jlawyer.persistence.MailboxSetup;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
+import com.jdimension.jlawyer.services.SecurityServiceRemote;
 import com.jdimension.jlawyer.services.SystemManagementRemote;
 import java.util.ArrayList;
-//import com.jdimension.jkanzlei.server.persistence.AppOptionGroupDTO;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Properties;
-import javax.persistence.NoResultException;
 import javax.swing.ImageIcon;
 import org.apache.log4j.Logger;
 
@@ -689,6 +689,7 @@ public class UserSettings {
     public static final String ROLE_WRITECASE = "writeArchiveFileRole";
     public static final String ROLE_READADDRESS = "readAddressRole";
     public static final String ROLE_WRITEADDRESS = "writeAddressRole";
+    public static final String ROLE_LOGIN = "loginRole";
 
     // key
     public static final String CLOUD_SHARE_FOLDERTEMPLATE = "cloud.share.foldertemplate";
@@ -706,25 +707,49 @@ public class UserSettings {
     public static final String CLOUD_SHARE_PERMISSIONS_UPLOADEDIT = "uploadedit";
 
     public static final String CONF_SEARCH_WITHARCHIVE = "user.conf.search.witharchive";
+
+    public static final String CONF_DESKTOP_RANDOM_BACKGROUND = "client.desktop.background.random";
+
+    public static final String CONF_DESKTOP_ONLYMYCASES = "client.desktop.onlymycases";
+    public static final String CONF_DESKTOP_ONLYMYREVIEWS = "client.desktop.onlymyreviews";
+    public static final String CONF_DESKTOP_ONLYMYTAGGED = "client.desktop.onlymytagged";
+    public static final String CONF_DESKTOP_LASTFILTERTAG = "client.desktop.lastfiltertag";
+    public static final String CONF_DESKTOP_LASTFILTERDOCUMENTTAG = "client.desktop.lastfilterdocumenttag";
+
+    public static final String CONF_DREBIS_TAGGINGENABLED = "user.drebis.taggingenabled";
+    public static final String CONF_DREBIS_DOCUMENTTAGGINGENABLED = "user.drebis.documenttaggingenabled";
+    public static final String CONF_DREBIS_LASTTAG = "user.drebis.lasttag";
+    public static final String CONF_DREBIS_LASTDOCUMENTTAG = "user.drebis.lastdocumenttag";
     
-    public static final String CONF_DESKTOP_RANDOM_BACKGROUND="client.desktop.background.random";
+    public static final String CONF_SCAN_DIVIDERKEYWORD = "user.scans.dividerkeyword";
     
-    public static final String CONF_DESKTOP_ONLYMYCASES="client.desktop.onlymycases";
-    public static final String CONF_DESKTOP_ONLYMYREVIEWS="client.desktop.onlymyreviews";
-    public static final String CONF_DESKTOP_ONLYMYTAGGED="client.desktop.onlymytagged";
-    public static final String CONF_DESKTOP_LASTFILTERTAG="client.desktop.lastfiltertag";
-    public static final String CONF_DESKTOP_LASTFILTERDOCUMENTTAG="client.desktop.lastfilterdocumenttag";
+    public static final String CONF_MAIL_LASTUSEDSETUP = "user.mail.lastusedsetup";
     
-    private static String ARRAY_DELIMITER="#####";
+    public static final String CONF_MAIL_LASTUSEDTEMPLATE = "user.mail.lastusedtemplate";
+    public static final String CONF_BEA_LASTUSEDTEMPLATE = "user.bea.lastusedtemplate";
+
+    public static final String CONF_CASE_LASTPARTYTYPE = "user.case.lastpartytype";
+
+    // will be used with a suffix indicating the event type (see CalendarSetup class)
+    public static final String CONF_CALENDAR_LASTSELECTED = "user.calendar.lastcalsetup.";
+    
+    
+    // for new bulk save dialog
+    public static final String CONF_BULKSAVE_LASTCASETAGS_PREFIX="user.bulksave.lastcasetags.";
+    public static final String CONF_BULKSAVE_LASTDOCTAGS_PREFIX="user.bulksave.lastdoctags.";
+    
+
+    private static final String ARRAY_DELIMITER = "#####";
 
     private static final Logger log = Logger.getLogger(UserSettings.class.getName());
     private static UserSettings instance = null;
-
+    
     private AppUserBean currentUser = null;
 
     private AppUserBean[] lawyerUsers = null;
     private AppUserBean[] assistantUsers = null;
     private AppUserBean[] allUsers = null;
+    private List<AppUserBean> loginEnabledUsers = null;
 
     private SystemManagementRemote mgmt = null;
 
@@ -735,6 +760,8 @@ public class UserSettings {
     private Hashtable<String, ImageIcon> userIconsSmall = new Hashtable<String, ImageIcon>();
     private Hashtable<String, ImageIcon> userIconsBig = new Hashtable<String, ImageIcon>();
     private Hashtable<String, List<String>> userRoles = new Hashtable<String, List<String>>();
+
+    private Hashtable<String, List<MailboxSetup>> userMailboxes = new Hashtable<String, List<MailboxSetup>>();
 
     private ArrayList<String> invalidUsers = new ArrayList<String>();
 
@@ -748,13 +775,35 @@ public class UserSettings {
             mgmt = locator.lookupSystemManagementRemote();
         } catch (Exception ex) {
             log.error("Error connecting to server", ex);
-            return;
         }
     }
 
     private void loadCache() {
         if (this.settingCache == null) {
             this.settingCache = this.mgmt.getUserSettings(this.currentUser);
+        }
+    }
+
+    public List<MailboxSetup> getMailboxes(String principalId) {
+        if (!this.userMailboxes.containsKey(principalId)) {
+            ClientSettings settings = ClientSettings.getInstance();
+            try {
+                JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+                SecurityServiceRemote svc = locator.lookupSecurityServiceRemote();
+                List<MailboxSetup> mailboxes = svc.getMailboxesForUser(UserSettings.getInstance().getCurrentUser().getPrincipalId());
+                this.userMailboxes.put(principalId, mailboxes);
+
+            } catch (Exception ex) {
+                log.error("Error determining mailbox for user " + principalId, ex);
+                this.userMailboxes.put(principalId, new ArrayList<>());
+            }
+        }
+        return this.userMailboxes.get(principalId);
+    }
+
+    public void invalidateMailboxes(String principalId) {
+        if (this.userMailboxes.containsKey(principalId)) {
+            this.userMailboxes.remove(principalId);
         }
     }
 
@@ -766,24 +815,30 @@ public class UserSettings {
         }
         return value;
     }
-    
+
     public String[] getSettingArray(String key, String[] defaultValue) {
-        String value=this.getSetting(key, null);
-        if(value==null)
+        String value = this.getSetting(key, null);
+        if (value == null) {
             return defaultValue;
-        
-        String[] ary=value.split(ARRAY_DELIMITER);
-        
+        }
+
+        String[] ary = value.split(ARRAY_DELIMITER);
+
         return ary;
     }
-    
+
     public void migrateFrom(ClientSettings cs, String key) {
         this.loadCache();
-        if(!(this.settingCache.containsKey(key))) {
-            this.setSetting(key, cs.getConfiguration(key, null));
+        if (!(this.settingCache.containsKey(key))) {
+            String csValue = cs.getConfiguration(key, null);
             cs.removeConfiguration(key);
+            if (csValue == null) {
+                return;
+            }
+            this.setSetting(key, csValue);
+
         }
-        
+
     }
 
     public void removeSetting(String key) {
@@ -810,6 +865,15 @@ public class UserSettings {
 
     public void setSetting(String key, String value) {
 
+        if (key == null) {
+            log.error("Key is null when setting user properties");
+            return;
+        }
+        if (value == null) {
+            log.error("Value is null when setting user properties with key " + key, new Exception());
+            return;
+        }
+
         // reload from server before changing a key
         this.settingCache = null;
         if (USER_AVATAR.equalsIgnoreCase(key)) {
@@ -829,12 +893,13 @@ public class UserSettings {
             }
         }
     }
-    
+
     public void setSettingArray(String key, String[] value) {
-        StringBuffer sb=new StringBuffer();
-        if(value==null)
-            value=new String[]{""};
-        for(String v: value) {
+        StringBuilder sb = new StringBuilder();
+        if (value == null) {
+            value = new String[]{""};
+        }
+        for (String v : value) {
             sb.append(v).append(ARRAY_DELIMITER);
         }
         this.setSetting(key, sb.toString());
@@ -845,6 +910,20 @@ public class UserSettings {
             instance = new UserSettings();
         }
         return instance;
+    }
+
+    /**
+     * @return the loginEnabledUsers
+     */
+    public List<AppUserBean> getLoginEnabledUsers() {
+        return loginEnabledUsers;
+    }
+
+    /**
+     * @param loginEnabledUsers the loginEnabledUsers to set
+     */
+    public void setLoginEnabledUsers(List<AppUserBean> loginEnabledUsers) {
+        this.loginEnabledUsers = loginEnabledUsers;
     }
 
     /**

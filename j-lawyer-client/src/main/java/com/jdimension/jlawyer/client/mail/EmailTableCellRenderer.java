@@ -667,6 +667,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
 import javax.mail.Message;
+import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JTable;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -678,6 +679,9 @@ import org.apache.log4j.Logger;
  */
 public class EmailTableCellRenderer extends DefaultTableCellRenderer {
 
+    private final ImageIcon newIcon = new javax.swing.ImageIcon(EmailTableCellRenderer.class.getResource("/icons/mail_new3.png"));
+    private final ImageIcon genericIcon = new javax.swing.ImageIcon(EmailTableCellRenderer.class.getResource("/icons/mail_generic.png"));
+    
     private static final Logger log = Logger.getLogger(EmailTableCellRenderer.class.getName());
 
     @Override
@@ -695,13 +699,16 @@ public class EmailTableCellRenderer extends DefaultTableCellRenderer {
         }
         
         
-        MessageContainer msgC = (MessageContainer) table.getValueAt(row, 0);
+        MessageContainer msgC = null;
+        try {
+            msgC=(MessageContainer) table.getValueAt(row, 0);
+        } catch (Throwable t) {
+            log.error(t);
+            return new JLabel("Fehler");
+        }
         Message msg = msgC.getMessage();
 
         Object returnRenderer = null;
-        //Object returnRenderer=super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-
-        //MessageContainer msgC= (MessageContainer)table.getValueAt(row, 0);
         if (msg.isExpunged()) {
             returnRenderer = super.getTableCellRendererComponent(table, "Nachricht gelöscht", isSelected, hasFocus, row, column);
             ((Component) returnRenderer).setFont(((Component) returnRenderer).getFont().deriveFont(Font.ITALIC));
@@ -716,21 +723,20 @@ public class EmailTableCellRenderer extends DefaultTableCellRenderer {
             if (!(msgC.isRead())) {
                 ((Component) returnRenderer).setFont(((Component) returnRenderer).getFont().deriveFont(Font.BOLD));
                 if (column == 0) {
-                    ((JLabel) ((Component) returnRenderer)).setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/mail_new3.png")));
+                    ((JLabel) ((Component) returnRenderer)).setIcon(newIcon);
                 } else {
                     ((JLabel) ((Component) returnRenderer)).setIcon(null);
                 }
             } else {
                 ((Component) returnRenderer).setFont(((Component) returnRenderer).getFont().deriveFont(Font.PLAIN));
                 if (column == 0) {
-                    ((JLabel) ((Component) returnRenderer)).setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/mail_generic.png")));
+                    ((JLabel) ((Component) returnRenderer)).setIcon(genericIcon);
                 } else {
                     ((JLabel) ((Component) returnRenderer)).setIcon(null);
                 }
             }
         } catch (Exception ex) {
             log.error(ex);
-            ex.printStackTrace();
         }
         return (Component) returnRenderer;
     }

@@ -666,6 +666,7 @@ package com.jdimension.jlawyer.services;
 import com.jdimension.jlawyer.server.utils.ServerFileUtils;
 import com.jdimension.jlawyer.fax.BalanceInformation;
 import com.jdimension.jlawyer.fax.SipUri;
+import com.jdimension.jlawyer.fax.SipUser;
 import com.jdimension.jlawyer.fax.SipgateException;
 import com.jdimension.jlawyer.fax.SipgateInstance;
 import com.jdimension.jlawyer.persistence.*;
@@ -683,8 +684,6 @@ import javax.annotation.security.RolesAllowed;
 import javax.ejb.EJB;
 import javax.ejb.SessionContext;
 import javax.ejb.Stateless;
-import javax.jms.*;
-import javax.naming.InitialContext;
 import org.apache.log4j.Logger;
 
 /**
@@ -698,11 +697,11 @@ public class VoipService implements VoipServiceRemote, VoipServiceLocal {
     @Resource
     private SessionContext context;
     @EJB
-    private ServerSettingsBeanFacadeLocal settingsFacade;
-    @EJB
     private FaxQueueBeanFacadeLocal faxFacade;
     @EJB
     private ArchiveFileBeanFacadeLocal fileFacade;
+    @EJB
+    private AppUserBeanFacadeLocal userBeanFacade;
     @EJB
     private ArchiveFileServiceLocal fileSvc;
     @EJB
@@ -714,77 +713,76 @@ public class VoipService implements VoipServiceRemote, VoipServiceLocal {
     @RolesAllowed({"loginRole"})
     public BalanceInformation getBalance() throws SipgateException {
 
-        if (!this.isVoipEnabled()) {
+        AppUserBean currentUser=this.sysMan.getUser(context.getCallerPrincipal().getName());
+        
+        if (!currentUser.isVoipEnabled()) {
             BalanceInformation bi = new BalanceInformation();
             bi.setCurrency("EUR");
             bi.setTotal(0d);
             bi.setValid(new Date());
             return bi;
         }
-
-        SipgateInstance sip = SipgateInstance.getInstance(this.settingsFacade.find("jlawyer.server.voip.voipendpoint").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voipuser").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voippwd").getSettingValue(), "j-lawyer Server", sysMan.getServerVersion());
+        
+        SipgateInstance sip = SipgateInstance.getInstance(currentUser.getVoipUser(), currentUser.getVoipPassword());
         return sip.getBalance();
     }
 
-    private boolean isVoipEnabled() {
-        ServerSettingsBean en = this.settingsFacade.find("jlawyer.server.voip.voipmode");
-        if (en == null) {
-            return false;
-        } else {
-            return "on".equalsIgnoreCase(en.getSettingValue());
-        }
-    }
-
+    
+    
     // Add business logic below. (Right-click in editor and choose
     // "Insert Code > Add Business Method")
     @Override
     @RolesAllowed({"loginRole"})
     public ArrayList<SipUri> getOwnUris() throws SipgateException {
-        if (!this.isVoipEnabled()) {
+        AppUserBean currentUser=this.sysMan.getUser(context.getCallerPrincipal().getName());
+        if (!currentUser.isVoipEnabled()) {
 
-            return new ArrayList<SipUri>();
+            return new ArrayList<>();
         }
 
-        SipgateInstance sip = SipgateInstance.getInstance(this.settingsFacade.find("jlawyer.server.voip.voipendpoint").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voipuser").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voippwd").getSettingValue(), "j-lawyer Server", sysMan.getServerVersion());
-        return sip.getOwnUris();
+        SipgateInstance sip = SipgateInstance.getInstance(currentUser.getVoipUser(), currentUser.getVoipPassword());
+        return sip.getOwnUris(currentUser.getVoipId());
     }
 
     @Override
     @RolesAllowed({"loginRole"})
-    public String initiateSms(String localUri, String remoteUri, String content) throws SipgateException {
-        if (!this.isVoipEnabled()) {
+    public void initiateSms(String localUri, String remoteUri, String content) throws SipgateException {
+        AppUserBean currentUser=this.sysMan.getUser(context.getCallerPrincipal().getName());
+        if (!currentUser.isVoipEnabled()) {
 
             throw new SipgateException("Voice-over-IP - Integration ist nicht aktiviert!");
         }
 
-        SipgateInstance sip = SipgateInstance.getInstance(this.settingsFacade.find("jlawyer.server.voip.voipendpoint").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voipuser").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voippwd").getSettingValue(), "j-lawyer Server", sysMan.getServerVersion());
-        return sip.initiateSms(localUri, remoteUri, content);
+        SipgateInstance sip = SipgateInstance.getInstance(currentUser.getVoipUser(), currentUser.getVoipPassword());
+        sip.initiateSms(localUri, remoteUri, content);
     }
 
     @Override
     @RolesAllowed({"loginRole"})
-    public String initiateCall(String localUri, String remoteUri) throws SipgateException {
-        if (!this.isVoipEnabled()) {
+    public String initiateCall(String localUri, String remoteUri, String callerId) throws SipgateException {
+        AppUserBean currentUser=this.sysMan.getUser(context.getCallerPrincipal().getName());
+        if (!currentUser.isVoipEnabled()) {
 
             throw new SipgateException("Voice-over-IP - Integration ist nicht aktiviert!");
         }
 
-        SipgateInstance sip = SipgateInstance.getInstance(this.settingsFacade.find("jlawyer.server.voip.voipendpoint").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voipuser").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voippwd").getSettingValue(), "j-lawyer Server", sysMan.getServerVersion());
-        return sip.initiateCall(localUri, remoteUri);
+        SipgateInstance sip = SipgateInstance.getInstance(currentUser.getVoipUser(), currentUser.getVoipPassword());
+        return sip.initiateCall(localUri, remoteUri, callerId);
     }
 
     @Override
     @RolesAllowed({"loginRole"})
     public String initiateFax(String localUri, String remoteUri, String remoteName, String pdfName, byte[] pdfData, String archiveFileId) throws SipgateException {
 
-        if (!this.isVoipEnabled()) {
+        AppUserBean currentUser=this.sysMan.getUser(context.getCallerPrincipal().getName());
+        if (!currentUser.isVoipEnabled()) {
 
             throw new SipgateException("Voice-over-IP - Integration ist nicht aktiviert!");
         }
 
-        SipgateInstance sip = SipgateInstance.getInstance(this.settingsFacade.find("jlawyer.server.voip.voipendpoint").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voipuser").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voippwd").getSettingValue(), "j-lawyer Server", sysMan.getServerVersion());
+        SipgateInstance sip = SipgateInstance.getInstance(currentUser.getVoipUser(), currentUser.getVoipPassword());
         Date sentDate = new Date();
-        String sessionId = sip.initiateFax(localUri, remoteUri, pdfData);
+        String sessionId = sip.initiateFax(localUri, remoteUri, pdfData, pdfName);
 
         String localBaseDir = System.getProperty("jlawyer.server.basedirectory");
         localBaseDir = localBaseDir.trim();
@@ -799,10 +797,8 @@ public class VoipService implements VoipServiceRemote, VoipServiceLocal {
         String queueFile = idGen.getID().toString();
         dst = dst + queueFile;
 
-        try {
-            FileOutputStream fos = new FileOutputStream(dst);
+        try (FileOutputStream fos = new FileOutputStream(dst)) {
             fos.write(pdfData);
-            fos.close();
         } catch (Exception ex) {
             log.error(ex);
             throw new SipgateException(ex);
@@ -836,24 +832,10 @@ public class VoipService implements VoipServiceRemote, VoipServiceLocal {
 
     private void publishQueueList() {
         try {
-//            InitialContext ic = new InitialContext();
-//            ConnectionFactory cf = (ConnectionFactory) ic.lookup("/ConnectionFactory");
-//            Topic observerTopic = (Topic) ic.lookup("/topic/faxQueueTopic");
-//            Connection connection = cf.createConnection();
-//            Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-//            MessageProducer producer = session.createProducer(observerTopic);
-//            connection.start();
 
-            ArrayList<FaxQueueBean> list = new ArrayList<FaxQueueBean>();
+            ArrayList<FaxQueueBean> list = new ArrayList<>();
             list.addAll(this.faxFacade.findAll());
             singleton.setFaxQueue(list);
-//            ObjectMessage msg = session.createObjectMessage(list);
-//            producer.send(msg);
-//
-//            connection.stop();
-//            producer.close();
-//            session.close();
-//            connection.close();
         } catch (Exception ex) {
             log.error("could not publish fax queue list", ex);
         }
@@ -863,7 +845,7 @@ public class VoipService implements VoipServiceRemote, VoipServiceLocal {
     @RolesAllowed({"loginRole"})
     public ArrayList<FaxQueueBean> queueList() throws Exception {
 
-        ArrayList<FaxQueueBean> list = new ArrayList<FaxQueueBean>();
+        ArrayList<FaxQueueBean> list = new ArrayList<>();
         list.addAll(this.faxFacade.findAll());
         return list;
 
@@ -871,14 +853,15 @@ public class VoipService implements VoipServiceRemote, VoipServiceLocal {
 
     @Override
     @PermitAll
-    public String getSessionStatus(String sessionId) throws SipgateException {
-        if (!this.isVoipEnabled()) {
+    public String getSessionStatus(String sessionId, String senderPrincipalId) throws SipgateException {
+        AppUserBean currentUser=this.userBeanFacade.findByPrincipalIdUnrestricted(senderPrincipalId);
+        if (!currentUser.isVoipEnabled()) {
 
             throw new SipgateException("Voice-over-IP - Integration ist nicht aktiviert!");
         }
 
-        SipgateInstance sip = SipgateInstance.getInstance(this.settingsFacade.find("jlawyer.server.voip.voipendpoint").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voipuser").getSettingValue(), this.settingsFacade.find("jlawyer.server.voip.voippwd").getSettingValue(), "j-lawyer Server", sysMan.getServerVersion());
-        return sip.getSessionStatus(sessionId);
+        SipgateInstance sip = SipgateInstance.getInstance(currentUser.getVoipUser(), currentUser.getVoipPassword());
+        return sip.getFaxStatus(sessionId);
     }
 
     @Override
@@ -940,7 +923,10 @@ public class VoipService implements VoipServiceRemote, VoipServiceLocal {
                 throw new SipgateException("Fax " + id + " wird noch verarbeitet - Status kann nicht gelöscht werden!");
             }
 
-        }
+        } else {
+            log.error("fax with id " + id + " does not exist");
+            throw new SipgateException("Fax " + id + " ist nicht (mehr) vorhanden!");
+        }     
 
         ArchiveFileBean afb = fb.getArchiveFileKey();
         String aFileId = null;
@@ -974,7 +960,7 @@ public class VoipService implements VoipServiceRemote, VoipServiceLocal {
 
         String newSession = this.initiateFax(fb.getLocalUri(), fb.getRemoteUri(), fb.getRemoteName(), fb.getPdfName(), pdfData, aFileId);
 
-        ArrayList<String> rem = new ArrayList<String>();
+        ArrayList<String> rem = new ArrayList<>();
         rem.add(fb.getSessionId());
         this.deleteQueueEntries(rem);
 
@@ -983,7 +969,7 @@ public class VoipService implements VoipServiceRemote, VoipServiceLocal {
 
     @Override
     @RolesAllowed({"loginRole"})
-    public void saveFaxReport(String sessionId) throws SipgateException {
+    public void saveFaxReport(String sessionId, String fileName) throws SipgateException {
         if (sessionId == null) {
             return;
         }
@@ -1003,36 +989,38 @@ public class VoipService implements VoipServiceRemote, VoipServiceLocal {
             throw new SipgateException("Fax " + sessionId + " wurde nicht aus einer Akte heraus verschickt!");
         }
 
+        AppUserBean currentUser=this.userBeanFacade.findByPrincipalIdUnrestricted(fb.getSentBy());
+        if (!currentUser.isVoipEnabled()) {
+
+            throw new SipgateException("Voice-over-IP - Integration ist nicht aktiviert!");
+        }
+
+        SipgateInstance sip = SipgateInstance.getInstance(currentUser.getVoipUser(), currentUser.getVoipPassword());
+        
         try {
-            SimpleDateFormat df = new SimpleDateFormat("dd-MM-yyyy_HH-mm-ss");
-            String fileName = "Faxbericht_" + df.format(new Date()) + "_" + sessionId.trim().subSequence(0, sessionId.length() > 5 ? 5 : sessionId.length()) + ".txt";
-            this.fileSvc.addDocument(afb.getId(), fileName, this.getReport(fb).getBytes(), "");
+            byte[] reportData=sip.getFaxReport(sessionId);
+            if(reportData!=null)
+                this.fileSvc.addDocument(afb.getId(), fileName, reportData, "");
         } catch (Exception ex) {
             throw new SipgateException(ex);
         }
 
-        ArrayList<String> list = new ArrayList<String>();
+        ArrayList<String> list = new ArrayList<>();
         list.add(sessionId);
         this.deleteQueueEntries(list);
     }
 
-    private String getReport(FaxQueueBean fb) {
-
-        SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
-        StringBuffer sb = new StringBuffer();
-        sb.append("Fax-Session-ID: ").append(fb.getSessionId()).append(System.getProperty("line.separator"));
-        sb.append("Fax gesendet von: ").append(fb.getSentBy()).append(System.getProperty("line.separator"));
-        sb.append("Fax gesendet am: ").append(df.format(fb.getSentDate())).append(System.getProperty("line.separator"));
-        sb.append("Fax gesendet an: ").append(fb.getRemoteName()).append(System.getProperty("line.separator")).append(System.getProperty("line.separator"));
-
-        sb.append("Datei: ").append(fb.getPdfName()).append(System.getProperty("line.separator")).append(System.getProperty("line.separator"));
-
-        sb.append("Absenderkennung: ").append(fb.getLocalUri()).append(System.getProperty("line.separator"));
-        sb.append("Empfaengerkennung: ").append(fb.getRemoteUri()).append(System.getProperty("line.separator")).append(System.getProperty("line.separator"));
-
-        sb.append("letzter Status: ").append(SipUtils.getDisplayableStatus(fb.getLastStatus())).append(" vom ").append(df.format(fb.getLastStatusDate()));
-
-        return sb.toString();
-
+    @Override
+    @RolesAllowed({"loginRole"})
+    public List<SipUser> getUsers(String user, String password) throws SipgateException {
+        SipgateInstance sip = SipgateInstance.getInstance(user, password);
+        return sip.getUsers();
     }
+
+    @Override
+    public String getNewFaxReportFileName(String sessionId) throws Exception {
+        SimpleDateFormat df = new SimpleDateFormat("dd-MM-yyyy_HH-mm-ss");
+        return "Faxbericht_" + df.format(new Date()) + "_" + sessionId.trim().subSequence(0, sessionId.length() > 5 ? 5 : sessionId.length()) + ".pdf";
+    }
+
 }

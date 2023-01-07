@@ -519,9 +519,13 @@
                     <authentication>
                         <login-module code="Database" flag="required">
                             <module-option name="dsJndiName" value="java:/jlawyerdb"/>
-                            <module-option name="principalsQuery" value="select password from AppUserBean where principalId=?"/>
-                            <module-option name="rolesQuery" value="select role, 'Roles' from AppRoleBean where principalId=?"/>
+                            <module-option name="principalsQuery" value="select password from security_users where principalId=?"/>
+                            <module-option name="rolesQuery" value="select role, 'Roles' from security_roles where principalId=?"/>
                             <module-option name="unauthenticatedIdentity" value="anonymous"/>
+                            <module-option name="hashAlgorithm" value="SHA-256"/>
+                            <module-option name="hashEncoding" value="base64"/>
+                            <module-option name="hashUserPassword" value="true"/>
+                            <module-option name="hashStorePassword" value="false"/>
                         </login-module>
                     </authentication>
                 </security-domain>

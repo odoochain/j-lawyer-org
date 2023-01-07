@@ -742,7 +742,7 @@ public class DayCaseHistoryDetailsPanel extends javax.swing.JPanel {
         setPreferredSize(new java.awt.Dimension(965, 189));
 
         lblArchiveFile.setBackground(new java.awt.Color(102, 0, 204));
-        lblArchiveFile.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblArchiveFile.setFont(lblArchiveFile.getFont().deriveFont(lblArchiveFile.getFont().getSize()+2f));
         lblArchiveFile.setForeground(new java.awt.Color(255, 255, 255));
         lblArchiveFile.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         lblArchiveFile.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_folder_white_36dp.png"))); // NOI18N
@@ -815,7 +815,7 @@ public class DayCaseHistoryDetailsPanel extends javax.swing.JPanel {
                 aFile = fileService.getArchiveFile(this.afb.getId());
             } catch (Exception ex) {
                 log.error("Error loading archive file from server", ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Laden der Akte: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Fehler beim Laden der Akte: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             }
 
             if (aFile == null) {
@@ -827,7 +827,7 @@ public class DayCaseHistoryDetailsPanel extends javax.swing.JPanel {
             EditorsRegistry.getInstance().setMainEditorsPaneView((Component) editor);
         } catch (Exception ex) {
             log.error("Error creating editor from class " + this.getClass().getName(), ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Laden des Editors: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden des Editors: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_lblArchiveFileMouseClicked
 

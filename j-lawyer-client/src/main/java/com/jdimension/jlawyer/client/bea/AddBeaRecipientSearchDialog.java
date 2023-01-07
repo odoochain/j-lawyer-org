@@ -700,7 +700,7 @@ public class AddBeaRecipientSearchDialog extends javax.swing.JDialog {
     private JComponent nextFocus = null;
 
     /**
-     * Creates new form AddAddressSearchDialog
+     * Creates new form AddBeaRecipientSearchDialog
      */
     public AddBeaRecipientSearchDialog(JDialog parent, boolean modal, JList to, JComponent nextFocus) {
         super(parent, modal);
@@ -860,12 +860,12 @@ public class AddBeaRecipientSearchDialog extends javax.swing.JDialog {
                 BeaAccess bea = BeaAccess.getInstance();
                 Identity i = bea.getIdentity(safeId);
                 DefaultListModel model=(DefaultListModel)this.to.getModel();
-                if(!model.contains(i))
-                    model.addElement(i);
+                model.removeAllElements();
+                model.addElement(i);
                 
             } catch (Throwable t) {
                 log.error(t);
-                JOptionPane.showMessageDialog(this, "beA-Identität kann nicht ermittelt werden: " + t.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "beA-Identität kann nicht ermittelt werden: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             }
         } else {
             JOptionPane.showMessageDialog(this, "Kein gültiger beA-Teilnehmer", "Hinweis", JOptionPane.WARNING_MESSAGE);

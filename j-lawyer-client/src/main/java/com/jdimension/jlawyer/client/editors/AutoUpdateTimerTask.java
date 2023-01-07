@@ -666,6 +666,7 @@ package com.jdimension.jlawyer.client.editors;
 import com.jdimension.jlawyer.client.events.AutoUpdateEvent;
 import com.jdimension.jlawyer.client.events.EventBroker;
 import com.jdimension.jlawyer.client.events.NewsEvent;
+import com.jdimension.jlawyer.client.events.ServicesEvent;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.client.settings.ServerSettings;
 import com.jdimension.jlawyer.client.settings.UserSettings;
@@ -683,10 +684,14 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLEncoder;
 import java.security.MessageDigest;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.apache.log4j.Logger;
 import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
@@ -701,6 +706,7 @@ public class AutoUpdateTimerTask extends java.util.TimerTask {
 
     /**
      * Creates a new instance of SystemStateTimerTask
+     * @param owner
      */
     public AutoUpdateTimerTask(Component owner) {
         super();
@@ -708,6 +714,7 @@ public class AutoUpdateTimerTask extends java.util.TimerTask {
 
     }
 
+    @Override
     public void run() {
 
         int addressCount = 0;
@@ -717,11 +724,9 @@ public class AutoUpdateTimerTask extends java.util.TimerTask {
             ClientSettings settings = ClientSettings.getInstance();
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
 
-            //AddressServiceRemoteHome home = (AddressServiceRemoteHome)locator.getRemoteHome("ejb/AddressServiceBean", AddressServiceRemoteHome.class);
             AddressServiceRemote addressService = locator.lookupAddressServiceRemote();
             addressCount = addressService.getAddressCount();
 
-            //ArchiveFileServiceRemoteHome fHome = (ArchiveFileServiceRemoteHome)locator.getRemoteHome("ejb/ArchiveFileServiceBean", ArchiveFileServiceRemoteHome.class);
             ArchiveFileServiceRemote fileService = locator.lookupArchiveFileServiceRemote();
             archiveFileCount = fileService.getArchiveFileCount();
 
@@ -742,18 +747,21 @@ public class AutoUpdateTimerTask extends java.util.TimerTask {
             osVersion = URLEncoder.encode(osVersion, "UTF-8");
 
             ServerSettings set = ServerSettings.getInstance();
-            String company = set.getSetting(set.PROFILE_COMPANYNAME, "x");
-            String zip = set.getSetting(set.PROFILE_COMPANYZIP, "x");
+            String company = set.getSetting(ServerSettings.PROFILE_COMPANYNAME, "x");
+            String zip = set.getSetting(ServerSettings.PROFILE_COMPANYZIP, "x");
 
-            String voipmode = set.getSetting(set.SERVERCONF_VOIPMODE, "off");
-            String drebismode = set.getSetting(set.SERVERCONF_DREBISMODE, "off");
-            String backupmode = set.getSetting(set.SERVERCONF_BACKUP_MODE, "off");
+            String voipmode = "off";
+            if (UserSettings.getInstance().getCurrentUser().isVoipEnabled()) {
+                voipmode = "on";
+            }
+            String drebismode = set.getSetting(ServerSettings.SERVERCONF_DREBISMODE, "off");
+            String backupmode = set.getSetting(ServerSettings.SERVERCONF_BACKUP_MODE, "off");
 
             // anonymous - identify as unique installation, but we don't care about personal details.
             String installationHash = md5(zip + " " + company);
             String userHash = md5(UserSettings.getInstance().getCurrentUser().getPrincipalId());
 
-            String csession = installationHash +",user=" + userHash + ",java=" + javaVersion + ",os=" + osName + ",osversion=" + osVersion + ",adrc=" + addressCount + ",afc=" + archiveFileCount + ",docc=" + docCount + ",j-lawyer=" + VersionUtils.getFullClientVersion() + ",drebis=" + drebismode + ",voip=" + voipmode + ",backup=" + backupmode;
+            String csession = installationHash + ",user=" + userHash + ",java=" + javaVersion + ",os=" + osName + ",osversion=" + osVersion + ",adrc=" + addressCount + ",afc=" + archiveFileCount + ",docc=" + docCount + ",j-lawyer=" + VersionUtils.getFullClientVersion() + ",drebis=" + drebismode + ",voip=" + voipmode + ",backup=" + backupmode;
 
             URL updateURL = new URL("https://www.j-lawyer.org/downloads/updatecheck.xml?csession=" + Crypto.encrypt(csession));
             URLConnection urlCon = updateURL.openConnection();
@@ -764,30 +772,33 @@ public class AutoUpdateTimerTask extends java.util.TimerTask {
 
             char[] buffer = new char[1024];
             int len = 0;
-            StringBuffer sb = new StringBuffer();
+            StringBuilder sb = new StringBuilder();
             while ((len = reader.read(buffer)) > -1) {
                 sb.append(buffer, 0, len);
             }
             reader.close();
             is.close();
             String updateContent = sb.toString();
-//            System.out.println(updateContent);
 
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            try {
+                dbf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+                dbf.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            } catch (IllegalArgumentException iae) {
+                // only available from JAXP 1.5+, but Wildfly still ships 1.4
+                log.warn("Unable to set external entity restrictions in XML parser", iae);
+            }
             DocumentBuilder db = dbf.newDocumentBuilder();
             Document doc = db.parse(new InputSource(new StringReader(updateContent)));
 
             NodeList nl = doc.getElementsByTagName("version");
             String version = nl.item(0).getTextContent();
-//            System.out.println(version);
 
             nl = doc.getElementsByTagName("changelogurl");
             String changelog = nl.item(0).getTextContent();
-//            System.out.println(changelog);
 
             nl = doc.getElementsByTagName("published");
             String published = nl.item(0).getTextContent();
-//            System.out.println(published);
 
             nl = doc.getElementsByTagName("news-published");
             String newsPublished = nl.item(0).getTextContent();
@@ -796,8 +807,7 @@ public class AutoUpdateTimerTask extends java.util.TimerTask {
             nl = doc.getElementsByTagName("news-summary");
             String newsSummary = nl.item(0).getTextContent();
 
-            //if (!VersionUtils.getFullClientVersion().equals(version)) {
-            if(VersionUtils.isVersionGreater(version, VersionUtils.getFullClientVersion())) {
+            if (VersionUtils.isVersionGreater(version, VersionUtils.getFullClientVersion())) {
                 EventBroker b = EventBroker.getInstance();
                 b.publishEvent(new AutoUpdateEvent(version, published, changelog));
             }
@@ -805,7 +815,6 @@ public class AutoUpdateTimerTask extends java.util.TimerTask {
             ClientSettings settings = ClientSettings.getInstance();
             String lastConfirmed = settings.getConfiguration("client.desktop.news.lastconfirmed", "dummy");
             if (!newsPublished.equals(lastConfirmed)) {
-                //EditorsRegistry.getInstance().newsNotification(newsSummary, newsPublished, newsUrl);
                 EventBroker b = EventBroker.getInstance();
                 b.publishEvent(new NewsEvent(newsSummary, newsPublished, newsUrl));
             }
@@ -817,14 +826,33 @@ public class AutoUpdateTimerTask extends java.util.TimerTask {
             nl = doc.getElementsByTagName("urlhelp");
             String urlHelp = nl.item(0).getTextContent();
             settings.setUrlHelp(urlHelp);
-            
+
             nl = doc.getElementsByTagName("urlxjustiz");
             String urlXjustiz = nl.item(0).getTextContent();
             settings.setUrlXjustiz(urlXjustiz);
-            
+
             nl = doc.getElementsByTagName("bea-enabled-versions");
             String beaEnabledVersions = nl.item(0).getTextContent();
             set.setSetting(ServerSettings.SERVERCONF_BEAENABLEDVERSIONS, beaEnabledVersions);
+            
+            
+            NodeList services = doc.getElementsByTagName("serviceitem");
+            TreeMap<String, ServiceMenuItem> serviceMap=new TreeMap<>();
+            for(int s=0;s<services.getLength();s++) {
+                NamedNodeMap attributes=services.item(s).getAttributes();
+                String serviceName=attributes.getNamedItem("name").getTextContent();
+                String serviceTooltip=attributes.getNamedItem("tooltip").getTextContent();
+                String serviceOrder=attributes.getNamedItem("order").getTextContent();
+                String serviceUrl=attributes.getNamedItem("url").getTextContent();
+                ServiceMenuItem mi=new ServiceMenuItem();
+                mi.setName(serviceName);
+                mi.setTooltip(serviceTooltip);
+                mi.setOrder(serviceOrder);
+                mi.setUrl(serviceUrl);
+                serviceMap.put(mi.getOrder(), mi);
+            }
+            EventBroker b = EventBroker.getInstance();
+            b.publishEvent(new ServicesEvent(serviceMap));
 
         } catch (Throwable t) {
             log.error("Error checking for updates on j-lawyer.org", t);
@@ -848,11 +876,6 @@ public class AutoUpdateTimerTask extends java.util.TimerTask {
 
             String hashtext = bigInt.toString(16);
 
-//            while (hashtext.length() < 32) {
-//
-//                hashtext = "0" + hashtext;
-//
-//            }
             return hashtext;
         } catch (Throwable t) {
             log.error(t);

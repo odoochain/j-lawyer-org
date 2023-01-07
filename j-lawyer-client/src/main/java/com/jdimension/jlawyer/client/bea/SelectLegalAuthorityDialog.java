@@ -664,11 +664,12 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 package com.jdimension.jlawyer.client.bea;
 
 import com.jdimension.jlawyer.client.settings.ClientSettings;
-import com.jdimension.jlawyer.client.settings.ServerSettings;
-import com.jdimension.jlawyer.client.settings.UserSettings;
+import com.jdimension.jlawyer.client.utils.StringUtils;
+import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 import javax.swing.DefaultListModel;
+import javax.swing.JDialog;
 import org.jlawyer.bea.model.LegalAuthorities;
 import org.jlawyer.bea.model.BeaListItem;
 
@@ -680,21 +681,41 @@ public class SelectLegalAuthorityDialog extends javax.swing.JDialog {
     
     private BeaListItem selectedAuthority=null;
     
-    private Hashtable<String,BeaListItem> authorities=new Hashtable<String,BeaListItem>();
+    private Hashtable<String,BeaListItem> authorities=new Hashtable<>();
 
     /**
      * Creates new form SelectLegalAuthorityDialog
+     * @param parent
+     * @param modal
      */
     public SelectLegalAuthorityDialog(java.awt.Frame parent, boolean modal) {
         super(parent, modal);
         initComponents();
+        this.initialize();
+    }
+    
+    public SelectLegalAuthorityDialog(JDialog parent, boolean modal) {
+        super(parent, modal);
+        initComponents();
+        this.initialize();
         
+    }
+    
+    private void initialize() {
         DefaultListModel lm=new DefaultListModel();
         List<BeaListItem> auths=LegalAuthorities.getAuthorities();
+        ArrayList<String> authNames=new ArrayList<>();
+        
+        
         for(BeaListItem la: auths) {
-            lm.addElement(la.getName());
+            authNames.add(la.getName());
             authorities.put(la.getName(), la);
         }
+        StringUtils.sortIgnoreCase(authNames);
+        for(String s: authNames) {
+            lm.addElement(s);
+        }
+        
         this.lstAuthorities.setModel(lm);
         this.cmdOK.setEnabled(true);
         
@@ -810,10 +831,16 @@ public class SelectLegalAuthorityDialog extends javax.swing.JDialog {
         this.cmdOK.setEnabled(false);
         DefaultListModel lm=new DefaultListModel();
         List<BeaListItem> auths=LegalAuthorities.getAuthorities();
+        ArrayList<String> authNames=new ArrayList<>();
         for(BeaListItem la: auths) {
-            if(la.getName().toLowerCase().indexOf(txtSearch.getText().toLowerCase())>-1)
-                lm.addElement(la.getName());
+            if(la.getName().toLowerCase().contains(txtSearch.getText().toLowerCase()))
+                authNames.add(la.getName());
         }
+        StringUtils.sortIgnoreCase(authNames);
+        for(String s: authNames) {
+            lm.addElement(s);
+        }
+        
         this.lstAuthorities.setModel(lm);
         if(lm.getSize()==1) {
             this.lstAuthorities.setSelectedIndex(0);
@@ -835,7 +862,6 @@ public class SelectLegalAuthorityDialog extends javax.swing.JDialog {
     }//GEN-LAST:event_cmdCancelActionPerformed
 
     private void cmdUnknownActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdUnknownActionPerformed
-        //ClientSettings.getInstance().setConfiguration(ClientSettings.CONF_BEASEND_LASTLEGALAUTHORITY, this.lstAuthorities.getSelectedValue());
         this.selectedAuthority=LegalAuthorities.getDefaultAuthority();
         this.setVisible(false);
         this.dispose();
@@ -869,17 +895,15 @@ public class SelectLegalAuthorityDialog extends javax.swing.JDialog {
         //</editor-fold>
 
         /* Create and display the dialog */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                SelectLegalAuthorityDialog dialog = new SelectLegalAuthorityDialog(new javax.swing.JFrame(), true);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            SelectLegalAuthorityDialog dialog = new SelectLegalAuthorityDialog(new javax.swing.JFrame(), true);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
 

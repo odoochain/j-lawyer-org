@@ -728,14 +728,18 @@ public class ConflictOfInterestUtils {
                 } else if(parent instanceof JFrame) {
                     dlg=new ConflictOfInterestDialog((JFrame)parent, true, address, selectedType, casesWithDifferentPartyType);
                 }
-                FrameUtils.centerDialog(dlg, parent);
-                dlg.setVisible(true);
+                if(dlg != null) {
+                    FrameUtils.centerDialog(dlg, parent);
+                    dlg.setVisible(true);
+                } else {
+                    log.error("unknown parent type for ConflictOfInterestDialog");
+                }
                 
             }
 
         } catch (Exception ex) {
             log.error("Error getting archive files for address", ex);
-            JOptionPane.showMessageDialog(parent, "Fehler beim Prüfen von Interessenkonflikten: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(parent, "Fehler beim Prüfen von Interessenkonflikten: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             EditorsRegistry.getInstance().clearStatus();
             return;
         }

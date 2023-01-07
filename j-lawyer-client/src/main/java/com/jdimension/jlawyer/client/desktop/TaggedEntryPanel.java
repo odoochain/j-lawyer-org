@@ -679,10 +679,12 @@ import com.jdimension.jlawyer.ui.tagging.TagUtils;
 import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
+import java.awt.RenderingHints;
 import javax.swing.JOptionPane;
 import org.apache.log4j.Logger;
 import themes.colors.DefaultColorTheme;
@@ -694,14 +696,14 @@ import themes.colors.DefaultColorTheme;
 public class TaggedEntryPanel extends javax.swing.JPanel {
 
     private static final Logger log = Logger.getLogger(TaggedEntryPanel.class.getName());
-    //DecimalFormat df = new DecimalFormat("0.00%");
     private TaggedEntry e = null;
     
     private Color normalBackground=null;
     private float alpha=DefaultColorTheme.DESKTOP_ALPHA_DEFAULT;
 
     /**
-     * Creates new form HitPanel
+     * Creates new form TaggedEntryPanel
+     * @param background
      */
     public TaggedEntryPanel(Color background) {
         initComponents();
@@ -714,34 +716,45 @@ public class TaggedEntryPanel extends javax.swing.JPanel {
         this.lblTags.setOpaque(false);
         
         ClientSettings settings=ClientSettings.getInstance();
-        String fontSizeOffset = settings.getConfiguration(settings.CONF_UI_FONTSIZEOFFSET, "0");
+        String fontSizeOffset = settings.getConfiguration(ClientSettings.CONF_UI_FONTSIZEOFFSET, "0");
         try {
             int offset = Integer.parseInt(fontSizeOffset);
             Font currentFont=this.lblTags.getFont();
             this.lblTags.setFont(currentFont.deriveFont((float)currentFont.getSize() + (float)offset));
-            
+
             currentFont=this.lblDocument.getFont();
             this.lblDocument.setFont(currentFont.deriveFont((float)currentFont.getSize() + (float)offset));
         } catch (Throwable t) {
             log.error("Could not set font size", t);
         }
+        
     }
     
     @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g); 
+     protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        Dimension arcs = new Dimension(15,15);
+        int width = getWidth();
+        int height = getHeight();
+        Graphics2D graphics = (Graphics2D) g;
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        Graphics2D g2d = (Graphics2D) g.create();
-        g2d.setComposite(AlphaComposite.SrcOver.derive(this.alpha));
-        g2d.setColor(getBackground());
-        g2d.fillRect(0, 0, getWidth(), getHeight());
-        g2d.dispose();
-
-    }
+        
+        graphics.setComposite(AlphaComposite.SrcOver.derive(this.alpha));
+        graphics.setColor(getBackground());
+        
+        graphics.setColor(getBackground());
+        graphics.fillRoundRect(0, 0, width-1, height-1, arcs.width, arcs.height);//paint background
+        graphics.setColor(getForeground());
+        
+        graphics.setColor(Color.WHITE);
+        graphics.drawRoundRect(0, 0, width-1, height-1, arcs.width, arcs.height);//paint border
+        graphics.drawRoundRect(1, 1, width-3, height-3, arcs.width, arcs.height);//paint border
+        graphics.drawRoundRect(2, 2, width-5, height-5, arcs.width, arcs.height);//paint border
+     }
 
     public void setEntry(TaggedEntry entry) {
         this.e = entry;
-        //this.lblFileName.setText(sh.getFileName() + " in " + sh.getArchiveFileNumber() + " " + sh.getArchiveFileName());
         String name = e.getName();
         if (name == null) {
             name = "";
@@ -761,12 +774,8 @@ public class TaggedEntryPanel extends javax.swing.JPanel {
         if (reason != null && !("".equals(reason))) {
             this.lblDescription.setText("<html><b>" + e.getFileNumber() + " " + name + "</b><br/>" + reason + "</html>");
         } else {
-            //this.lblDescription.setText("<html><b>" + e.getFileNumber() + " " + name + "</b><br/>---</html>");
             this.lblDescription.setText("<html><b>" + e.getFileNumber() + " " + name + "</b></html>");
         }
-        //this.lblFileName.setToolTipText("<html>" + StringUtils.addHtmlLinebreaks(sh.getText(), 60) + "</html>");
-        //this.lblDescription.setToolTipText(sh.getText());
-        //this.lblDescription.setIcon(FileUtils.getInstance().getFileTypeIcon(sh.getFileName()));
         this.lblChangedBy.setText(e.getLastChangedBy());
         if (e.getLastChangedBy() != null && !("".equals(e.getLastChangedBy()))) {
             this.lblChangedBy.setIcon(UserSettings.getInstance().getUserSmallIcon(e.getLastChangedBy()));
@@ -778,15 +787,6 @@ public class TaggedEntryPanel extends javax.swing.JPanel {
 
         this.lblTags.setText("");
         if (e.getTags() != null) {
-//            StringBuffer sb = new StringBuffer();
-//            sb.append("<html>");
-//            for (String t : e.getTags()) {
-//                //sb.append(t).append(", ");
-//                sb.append(t).append("<br/>");
-//            }
-//            sb.append("</html>");
-//            String tagString = sb.toString();
-//            this.lblTags.setText(tagString);
 
             String tagList=TagUtils.getTagList(e.getTags());
             String shortenedTagList=tagList;
@@ -796,6 +796,9 @@ public class TaggedEntryPanel extends javax.swing.JPanel {
             
             this.lblTags.setText(shortenedTagList);
             this.lblTags.setToolTipText(tagList);
+            
+            if(this.lblTags.getText().length()>0)
+                this.lblTags.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_grey_36dp.png")));
 
         }
 
@@ -816,13 +819,6 @@ public class TaggedEntryPanel extends javax.swing.JPanel {
             this.lblDocument.setToolTipText(null);
         }
 
-//        if (sh.getScore() >= 0.50f) {
-//            this.lblChangedBy.setForeground(Color.green);
-//        } else if (sh.getScore() > 0.20f && sh.getScore() < 0.50f) {
-//            this.lblChangedBy.setForeground(Color.orange);
-//        } else {
-//            this.lblChangedBy.setForeground(Color.red);
-//        }
     }
 
     /**
@@ -841,14 +837,15 @@ public class TaggedEntryPanel extends javax.swing.JPanel {
         lblDocument = new javax.swing.JLabel();
 
         addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                formMouseExited(evt);
-            }
             public void mouseEntered(java.awt.event.MouseEvent evt) {
                 formMouseEntered(evt);
             }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                formMouseExited(evt);
+            }
         });
 
+        lblDescription.setFont(lblDescription.getFont());
         java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/LastChangedEntryPanel"); // NOI18N
         lblDescription.setText(bundle.getString("label.case.name")); // NOI18N
         lblDescription.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
@@ -864,25 +861,25 @@ public class TaggedEntryPanel extends javax.swing.JPanel {
             }
         });
 
-        lblChangedBy.setFont(new java.awt.Font("Dialog", 3, 12)); // NOI18N
+        lblChangedBy.setFont(lblChangedBy.getFont().deriveFont((lblChangedBy.getFont().getStyle() | java.awt.Font.ITALIC) | java.awt.Font.BOLD));
         lblChangedBy.setForeground(new java.awt.Color(14, 114, 181));
         lblChangedBy.setText("user");
 
-        lblTags.setFont(new java.awt.Font("Dialog", 0, 10)); // NOI18N
+        lblTags.setFont(lblTags.getFont().deriveFont(lblTags.getFont().getStyle() & ~java.awt.Font.BOLD, lblTags.getFont().getSize()-2));
         lblTags.setForeground(new java.awt.Color(14, 114, 181));
         lblTags.setText(" ");
         lblTags.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                lblTagsMouseExited(evt);
-            }
             public void mouseEntered(java.awt.event.MouseEvent evt) {
                 lblTagsMouseEntered(evt);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                lblTagsMouseExited(evt);
             }
         });
 
         jLabel1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/folder.png"))); // NOI18N
 
-        lblDocument.setFont(new java.awt.Font("Dialog", 0, 10)); // NOI18N
+        lblDocument.setFont(lblDocument.getFont().deriveFont(lblDocument.getFont().getStyle() & ~java.awt.Font.BOLD, lblDocument.getFont().getSize()-2));
         lblDocument.setForeground(new java.awt.Color(0, 153, 255));
         lblDocument.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseExited(java.awt.event.MouseEvent evt) {
@@ -906,9 +903,9 @@ public class TaggedEntryPanel extends javax.swing.JPanel {
                     .addComponent(lblDocument, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(layout.createSequentialGroup()
                         .addComponent(lblDescription)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 127, Short.MAX_VALUE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                         .addComponent(lblChangedBy)))
-                .addContainerGap())
+                .addGap(15, 15, 15))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -922,18 +919,16 @@ public class TaggedEntryPanel extends javax.swing.JPanel {
                 .addComponent(lblDocument)
                 .addGap(3, 3, 3)
                 .addComponent(lblTags)
-                .addGap(3, 3, 3))
+                .addGap(9, 9, 9))
         );
     }// </editor-fold>//GEN-END:initComponents
 
     private void lblDescriptionMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblDescriptionMouseEntered
-        //this.lblDescription.setForeground(DefaultColorTheme.COLOR_DARK_GREY);
         this.alpha=DefaultColorTheme.DESKTOP_ALPHA_HIGHLIGHT;
         this.setBackground(new Color(250,250,250));
     }//GEN-LAST:event_lblDescriptionMouseEntered
 
     private void lblDescriptionMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblDescriptionMouseExited
-        //this.lblDescription.setForeground(Color.BLACK);
         this.alpha=DefaultColorTheme.DESKTOP_ALPHA_DEFAULT;
         this.setBackground(this.normalBackground);
     }//GEN-LAST:event_lblDescriptionMouseExited

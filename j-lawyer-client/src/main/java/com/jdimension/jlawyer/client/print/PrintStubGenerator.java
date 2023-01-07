@@ -677,10 +677,8 @@ import java.util.ArrayList;
  */
 public class PrintStubGenerator {
 
-    private static SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy");
-
     public static ReviewsStub getStub(ArrayList<ArchiveFileReviewsBean> revList, ArrayList<ArchiveFileBean> fileList, String criteriaString) {
-        ArrayList<ReviewsDetail> result = new ArrayList<ReviewsDetail>();
+        ArrayList<ReviewsDetail> result = new ArrayList<>();
         for (int i = 0; i < revList.size(); i++) {
             ArchiveFileReviewsBean rev = revList.get(i);
             ArchiveFileBean ar = fileList.get(i);
@@ -698,31 +696,31 @@ public class PrintStubGenerator {
 
         s.setClaimNumber(file.getClaimNumber());
         s.setClaimValue(file.getClaimValue());
-        //s.setDictateSign(file.getDictateSign());
         s.setFileNumber(file.getFileNumber());
         s.setName(file.getName());
         s.setNotice(file.getNotice());
-        if(file.getReason()!=null)
+        if (file.getReason() != null) {
             s.setReason(file.getReason());
-        else
+        } else {
             s.setReason("");
-        if(file.getLawyer()!=null)
+        }
+        if (file.getLawyer() != null) {
             s.setLawyer(file.getLawyer());
-        else
+        } else {
             s.setLawyer("");
-        
-        if(file.getAssistant()!=null)
+        }
+
+        if (file.getAssistant() != null) {
             s.setAssistant(file.getAssistant());
-        else
+        } else {
             s.setAssistant("");
+        }
 
         if (file.getArchiveFileAddressesBeanList() != null) {
             for (int i = 0; i < file.getArchiveFileAddressesBeanList().size(); i++) {
-                
-                
+
                 ArchiveFileAddressesBean ab = file.getArchiveFileAddressesBeanList().get(i);
                 s.addParty(getAddressDetail(ab.getAddressKey(), ab));
-                
 
             }
         }
@@ -734,13 +732,17 @@ public class PrintStubGenerator {
                 s.getReviews().add(rdet);
             }
         }
-        
+
         s.sortReviews();
 
         return s;
     }
 
     private static ReviewsDetail getReviewDetail(ArchiveFileReviewsBean rev, ArchiveFileBean ar) {
+        SimpleDateFormat dateTimeFormat = new SimpleDateFormat("dd.MM.yy HH:mm");
+        SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yy");
+
         ReviewsDetail det = new ReviewsDetail();
         if (rev.getDone() == 1) {
             det.setDoneStatus("erledigt");
@@ -751,12 +753,9 @@ public class PrintStubGenerator {
         det.setFileName(ar.getName());
         det.setAssignee(rev.getAssignee());
         det.setFileNumber(ar.getFileNumber());
-        det.setReviewTypeName(rev.getReviewTypeName());
-        if(rev.getReviewDate()!=null)
-            det.setReviewDate(df.format(rev.getReviewDate()));
-        else
-            det.setReviewDate("");
-        det.setReviewReason(rev.getReviewReason());
+        det.setReviewTypeName(rev.getEventTypeName());
+        det.setReviewDate(rev.toString(dateTimeFormat, dateFormat, timeFormat));
+        det.setReviewReason(rev.getSummary());
 
         return det;
     }
@@ -764,44 +763,54 @@ public class PrintStubGenerator {
     private static AddressDetail getAddressDetail(AddressBean b, ArchiveFileAddressesBean roleInCase) {
         AddressDetail d = new AddressDetail();
         d.setCity(b.getCity());
-        if(b.getCompany()!=null)
+        if (b.getCompany() != null) {
             d.setCompany(b.getCompany());
-        else
+        } else {
             d.setCompany("");
+        }
         d.setCountry(b.getCountry());
         d.setEmail(b.getEmail());
-        if(StringUtils.isEmpty(b.getFax())) {
+        if (StringUtils.isEmpty(b.getFax())) {
             d.setFax("                         ");
         } else {
             d.setFax(b.getFax());
         }
         d.setFirstName(b.getFirstName());
         d.setName(b.getName());
-        if(StringUtils.isEmpty(b.getPhone())) {
+        if (StringUtils.isEmpty(b.getPhone())) {
             d.setPhone("                         ");
         } else {
             d.setPhone(b.getPhone());
         }
-        
-        if(StringUtils.isEmpty(b.getMobile())) {
+
+        if (StringUtils.isEmpty(b.getMobile())) {
             d.setMobile("                         ");
         } else {
             d.setMobile(b.getMobile());
         }
         d.setStreet(b.getStreet());
+        if (b.getStreetNumber() == null) {
+            d.setStreetNumber("");
+        } else {
+            d.setStreetNumber(b.getStreetNumber());
+        }
         d.setWebsite(b.getWebsite());
         d.setZipCode(b.getZipCode());
-        
-        if(roleInCase!=null)
+
+        if (roleInCase != null) {
             d.setReference(roleInCase.getReference());
-        
-        if(roleInCase!=null)
+        }
+
+        if (roleInCase != null) {
             d.setContact(roleInCase.getContact());
-        
-        if(roleInCase!=null)
-            if(roleInCase.getReferenceType()!=null)
+        }
+
+        if (roleInCase != null) {
+            if (roleInCase.getReferenceType() != null) {
                 d.setPartyType(roleInCase.getReferenceType().getName());
-        
+            }
+        }
+
         return d;
     }
 }

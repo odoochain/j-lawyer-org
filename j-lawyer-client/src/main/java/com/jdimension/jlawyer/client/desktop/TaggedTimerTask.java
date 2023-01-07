@@ -663,6 +663,8 @@
  */
 package com.jdimension.jlawyer.client.desktop;
 
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ListMultimap;
 import com.jdimension.jlawyer.client.editors.*;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.client.settings.UserSettings;
@@ -675,26 +677,20 @@ import com.jdimension.jlawyer.persistence.ArchiveFileTagsBean;
 import com.jdimension.jlawyer.persistence.DocumentTagsBean;
 import com.jdimension.jlawyer.services.ArchiveFileServiceRemote;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
+
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.GridLayout;
+import java.awt.Dimension;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.ItemListener;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Hashtable;
-import java.util.List;
-import java.util.TimerTask;
-import java.util.logging.Level;
+import java.nio.channels.ClosedChannelException;
+import java.util.*;
+import javax.ejb.EJBException;
 import javax.swing.*;
+
 import org.apache.log4j.Logger;
 import themes.colors.DefaultColorTheme;
 
 /**
- *
  * @author jens
  */
 public class TaggedTimerTask extends java.util.TimerTask {
@@ -710,14 +706,27 @@ public class TaggedTimerTask extends java.util.TimerTask {
     private JPopupMenu popDocumentTags = null;
     private JButton tagMenu = null;
     private JButton tagDocumentMenu = null;
+    private JTabbedPane tagsPane = null;
 
     /**
      * Creates a new instance of SystemStateTimerTask
+     *
+     * @param owner
+     * @param tagsPane
+     * @param resultPanel
+     * @param split
+     * @param tagMenu
+     * @param popDocumentTags
+     * @param popTags
+     * @param tagDocumentMenu
+     * @param ignoreCurrentEditorParam
+     * @param rebuildPopup
      */
-    public TaggedTimerTask(Component owner, JPanel resultPanel, JSplitPane split, JButton tagMenu, JButton tagDocumentMenu, JPopupMenu popTags, JPopupMenu popDocumentTags, boolean ignoreCurrentEditorParam, boolean rebuildPopup) {
+    public TaggedTimerTask(Component owner, JTabbedPane tagsPane, JPanel resultPanel, JSplitPane split, JButton tagMenu, JButton tagDocumentMenu, JPopupMenu popTags, JPopupMenu popDocumentTags, boolean ignoreCurrentEditorParam, boolean rebuildPopup) {
         super();
         this.owner = owner;
         this.resultUI = resultPanel;
+        this.tagsPane = tagsPane;
         this.split = split;
         this.ignoreCurrentEditor = ignoreCurrentEditorParam;
         this.rebuildPopup = rebuildPopup;
@@ -727,27 +736,26 @@ public class TaggedTimerTask extends java.util.TimerTask {
         this.tagDocumentMenu = tagDocumentMenu;
     }
 
-    public TaggedTimerTask(Component owner, JPanel resultPanel, JSplitPane split, JButton tagMenu, JButton tagDocumentMenu, JPopupMenu popTags, JPopupMenu popDocumentTags, boolean ignoreCurrentEditorParam) {
-        this(owner, resultPanel, split, tagMenu, tagDocumentMenu, popTags, popDocumentTags, ignoreCurrentEditorParam, true);
+    public TaggedTimerTask(Component owner, JTabbedPane tagsPane, JPanel resultPanel, JSplitPane split, JButton tagMenu, JButton tagDocumentMenu, JPopupMenu popTags, JPopupMenu popDocumentTags, boolean ignoreCurrentEditorParam) {
+        this(owner, tagsPane, resultPanel, split, tagMenu, tagDocumentMenu, popTags, popDocumentTags, ignoreCurrentEditorParam, true);
     }
 
-    public TaggedTimerTask(Component owner, JPanel resultPanel, JSplitPane split, JButton tagMenu, JButton tagDocumentMenu, JPopupMenu popTags, JPopupMenu popDocumentTags) {
-        this(owner, resultPanel, split, tagMenu, tagDocumentMenu, popTags, popDocumentTags, false);
+    public TaggedTimerTask(Component owner, JTabbedPane tagsPane, JPanel resultPanel, JSplitPane split, JButton tagMenu, JButton tagDocumentMenu, JPopupMenu popTags, JPopupMenu popDocumentTags) {
+        this(owner, tagsPane, resultPanel, split, tagMenu, tagDocumentMenu, popTags, popDocumentTags, false);
     }
 
     private void buildPopup(JButton button, JPopupMenu popup, List<String> tagsInUse, String[] lastFilterTags, String userSettingsKey) {
         // update combobox with tags that are currently in use, but only if there was an actual change
-        List<String> currentComboItems = new ArrayList<String>();
+        List<String> currentComboItems = new ArrayList<>();
         MenuElement[] elements = popup.getSubElements();
         for (MenuElement e : elements) {
             currentComboItems.add(((JCheckBoxMenuItem) e.getComponent()).getText());
-            //this.popTags.add(new JCheckBoxMenuItem(currentModel.getElementAt(i).toString()));
 
         }
         Collections.sort(currentComboItems);
         StringUtils.sortIgnoreCase(currentComboItems);
         if (tagsInUse == null) {
-            tagsInUse = new ArrayList<String>();
+            tagsInUse = new ArrayList<>();
         }
         StringUtils.sortIgnoreCase(tagsInUse);
         if (!tagsInUse.equals(currentComboItems)) {
@@ -763,7 +771,7 @@ public class TaggedTimerTask extends java.util.TimerTask {
                     mi.setSelected(false);
                 }
                 popup.add(mi);
-                
+
             }
             if (hasSelection) {
                 button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_green_36dp.png")));
@@ -771,40 +779,31 @@ public class TaggedTimerTask extends java.util.TimerTask {
                 button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_white_36dp.png")));
             }
             for (MenuElement me : popup.getSubElements()) {
-                ((JCheckBoxMenuItem) me.getComponent()).addActionListener(new ActionListener() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        boolean selected = false;
-                        System.out.println("source: " + ((JCheckBoxMenuItem) e.getSource()).getText() + ((JCheckBoxMenuItem) e.getSource()).isSelected());
-                        System.out.println("10");
-                        ArrayList<String> al = new ArrayList<String>();
-                        for (MenuElement me : popup.getSubElements()) {
-                            JCheckBoxMenuItem mi = ((JCheckBoxMenuItem) me.getComponent());
-                            if (mi.isSelected()) {
-                                al.add(mi.getText());
-                                selected = true;
-                            }
+                ((JCheckBoxMenuItem) me.getComponent()).addActionListener((ActionEvent e) -> {
+                    boolean selected = false;
+                    ArrayList<String> al = new ArrayList<>();
+                    for (MenuElement me1 : popup.getSubElements()) {
+                        JCheckBoxMenuItem mi = (JCheckBoxMenuItem) me1.getComponent();
+                        if (mi.isSelected()) {
+                            al.add(mi.getText());
+                            selected = true;
                         }
-
-                        if (selected) {
-                            button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_green_36dp.png")));
-                        } else {
-                            button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_white_36dp.png")));
-                        }
-
-                        System.out.println("60: " + al);
-                        UserSettings.getInstance().setSettingArray(userSettingsKey, al.toArray(new String[al.size()]));
-                        TimerTask taggedTask = new TaggedTimerTask(EditorsRegistry.getInstance().getMainWindow(), resultUI, split, tagMenu, tagDocumentMenu, popTags, popDocumentTags, true, false);
-                        new java.util.Timer().schedule(taggedTask, 1000);
-
                     }
-
+                    if (selected) {
+                        button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_green_36dp.png")));
+                    } else {
+                        button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_white_36dp.png")));
+                    }
+                    UserSettings.getInstance().setSettingArray(userSettingsKey, al.toArray(new String[al.size()]));
+                    TimerTask taggedTask = new TaggedTimerTask(EditorsRegistry.getInstance().getMainWindow(), tagsPane, resultUI, split, tagMenu, tagDocumentMenu, popTags, popDocumentTags, true, false);
+                    new java.util.Timer().schedule(taggedTask, 1000);
                 });
             }
 
         }
     }
 
+    @Override
     public void run() {
 
         if (running == true) {
@@ -813,24 +812,26 @@ public class TaggedTimerTask extends java.util.TimerTask {
 
         running = true;
 
-        List<ArchiveFileBean> myNewList = new ArrayList<ArchiveFileBean>();
-        List<ArchiveFileBean> filteredList = new ArrayList<ArchiveFileBean>();
-        Hashtable<String, List<ArchiveFileTagsBean>> tags = new Hashtable<String, List<ArchiveFileTagsBean>>();
+        List<ArchiveFileBean> myNewList = null;
+        List<ArchiveFileBean> filteredList = new ArrayList<>();
+        HashMap<String, ArrayList<ArchiveFileTagsBean>> tags;
 
-        List<ArchiveFileDocumentsBean> myNewDocumentList = new ArrayList<ArchiveFileDocumentsBean>();
-        List<ArchiveFileDocumentsBean> filteredDocumentList = new ArrayList<ArchiveFileDocumentsBean>();
-        Hashtable<String, List<DocumentTagsBean>> documentTags = new Hashtable<String, List<DocumentTagsBean>>();
+        List<ArchiveFileDocumentsBean> myNewDocumentList = null;
+        List<ArchiveFileDocumentsBean> filteredDocumentList = new ArrayList<>();
+        HashMap<String, ArrayList<DocumentTagsBean>> documentTags;
+
+        String[] lastFilterDocumentTags = null;
+        String[] lastFilterTags = null;
 
         try {
-            //System.out.println("TaggedTimerTask#run @ " + System.currentTimeMillis() + " from " + source);
             ClientSettings settings = ClientSettings.getInstance();
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
 
             UserSettings.getInstance().migrateFrom(settings, UserSettings.CONF_DESKTOP_LASTFILTERTAG);
-            String[] lastFilterTags = UserSettings.getInstance().getSettingArray(UserSettings.CONF_DESKTOP_LASTFILTERTAG, new String[]{""});
+            lastFilterTags = UserSettings.getInstance().getSettingArray(UserSettings.CONF_DESKTOP_LASTFILTERTAG, new String[]{""});
             List<String> caseTagsInUse = settings.getArchiveFileTagsInUse();
             AppOptionGroupBean[] allCaseTags = settings.getArchiveFileTagDtos();
-            List<String> allCaseTagsAsString = new ArrayList<String>();
+            List<String> allCaseTagsAsString = new ArrayList<>();
             for (AppOptionGroupBean aog : allCaseTags) {
                 allCaseTagsAsString.add(aog.getValue());
             }
@@ -840,16 +841,15 @@ public class TaggedTimerTask extends java.util.TimerTask {
                 }
             }
             if (this.rebuildPopup && !(this.popTags.isVisible())) {
-                //this.buildPopup(this.tagMenu, this.popTags, tagsInUse, lastFilterTags, settings.CONF_DESKTOP_LASTFILTERTAG);
                 UserSettings.getInstance().migrateFrom(settings, UserSettings.CONF_DESKTOP_LASTFILTERTAG);
                 this.buildPopup(this.tagMenu, this.popTags, allCaseTagsAsString, lastFilterTags, UserSettings.CONF_DESKTOP_LASTFILTERTAG);
             }
 
             UserSettings.getInstance().migrateFrom(settings, UserSettings.CONF_DESKTOP_LASTFILTERDOCUMENTTAG);
-            String[] lastFilterDocumentTags = UserSettings.getInstance().getSettingArray(UserSettings.CONF_DESKTOP_LASTFILTERDOCUMENTTAG, new String[]{""});
+            lastFilterDocumentTags = UserSettings.getInstance().getSettingArray(UserSettings.CONF_DESKTOP_LASTFILTERDOCUMENTTAG, new String[]{""});
             List<String> docTagsInUse = settings.getDocumentTagsInUse();
             AppOptionGroupBean[] allDocTags = settings.getDocumentTagDtos();
-            List<String> allDocTagsAsString = new ArrayList<String>();
+            List<String> allDocTagsAsString = new ArrayList<>();
             for (AppOptionGroupBean aog : allDocTags) {
                 allDocTagsAsString.add(aog.getValue());
             }
@@ -859,7 +859,6 @@ public class TaggedTimerTask extends java.util.TimerTask {
                 }
             }
             if (this.rebuildPopup && !(this.popDocumentTags.isVisible())) {
-                //this.buildPopup(this.tagDocumentMenu, this.popDocumentTags, tagsInUse, lastFilterDocumentTags, settings.CONF_DESKTOP_LASTFILTERDOCUMENTTAG);
                 UserSettings.getInstance().migrateFrom(settings, UserSettings.CONF_DESKTOP_LASTFILTERDOCUMENTTAG);
                 this.buildPopup(this.tagDocumentMenu, this.popDocumentTags, allDocTagsAsString, lastFilterDocumentTags, UserSettings.CONF_DESKTOP_LASTFILTERDOCUMENTTAG);
             }
@@ -880,7 +879,7 @@ public class TaggedTimerTask extends java.util.TimerTask {
 
             ArchiveFileServiceRemote fileService = locator.lookupArchiveFileServiceRemote();
 
-            myNewList = fileService.getTagged(lastFilterTags, null, 50);
+            myNewList = fileService.getTagged(lastFilterTags, null, 1000);
             UserSettings.getInstance().migrateFrom(settings, UserSettings.CONF_DESKTOP_ONLYMYTAGGED);
             String temp = UserSettings.getInstance().getSetting(UserSettings.CONF_DESKTOP_ONLYMYTAGGED, "false");
             if ("true".equalsIgnoreCase(temp)) {
@@ -893,12 +892,14 @@ public class TaggedTimerTask extends java.util.TimerTask {
                 }
                 myNewList = filteredList;
             }
-            for (ArchiveFileBean a : myNewList) {
-                Collection<ArchiveFileTagsBean> xTags = fileService.getTags(a.getId());
-                tags.put(a.getId(), (List<ArchiveFileTagsBean>) xTags);
-            }
 
-            myNewDocumentList = fileService.getTaggedDocuments(lastFilterDocumentTags, 50);
+            ArrayList<String> myNewListIds = new ArrayList<>();
+            for (ArchiveFileBean a : myNewList) {
+                myNewListIds.add(a.getId());
+            }
+            tags = fileService.getTags(myNewListIds);
+
+            myNewDocumentList = fileService.getTaggedDocuments(lastFilterDocumentTags, 1000);
             if ("true".equalsIgnoreCase(temp)) {
                 String principalId = UserSettings.getInstance().getCurrentUser().getPrincipalId();
                 for (ArchiveFileDocumentsBean x : myNewDocumentList) {
@@ -909,15 +910,27 @@ public class TaggedTimerTask extends java.util.TimerTask {
                 }
                 myNewDocumentList = filteredDocumentList;
             }
-            for (ArchiveFileDocumentsBean a : myNewDocumentList) {
-                Collection<DocumentTagsBean> xTags = fileService.getDocumentTags(a.getId());
-                documentTags.put(a.getId(), (List<DocumentTagsBean>) xTags);
-            }
-            //running=false;
 
+            ArrayList<String> myNewDocumentListIds = new ArrayList<>();
+            for (ArchiveFileDocumentsBean d : myNewDocumentList) {
+                myNewDocumentListIds.add(d.getId());
+            }
+            documentTags = fileService.getDocumentTags(myNewDocumentListIds);
+
+        } catch (EJBException | ClosedChannelException ex) {
+            log.error("Error connecting to server", ex);
+            if (ex instanceof ClosedChannelException) {
+                // ignore connection loss
+            } else if (ex instanceof EJBException && ex.getCause() != null && ex.getCause() instanceof ClosedChannelException) {
+                // ignore connection loss
+            } else {
+                // could be a SQL error or whatever - display to user
+                ThreadUtils.showErrorDialog(this.owner, java.text.MessageFormat.format(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/TaggedTimerTask").getString("msg.connectionerror"), new Object[]{ex.getMessage()}), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/TaggedTimerTask").getString("msg.error"));
+            }
+            running = false;
+            return;
         } catch (Throwable ex) {
             log.error("Error connecting to server", ex);
-            //JOptionPane.showMessageDialog(this.owner, "Verbindungsfehler: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
             ThreadUtils.showErrorDialog(this.owner, java.text.MessageFormat.format(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/TaggedTimerTask").getString("msg.connectionerror"), new Object[]{ex.getMessage()}), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/TaggedTimerTask").getString("msg.error"));
             running = false;
             return;
@@ -926,95 +939,164 @@ public class TaggedTimerTask extends java.util.TimerTask {
         try {
             final List<ArchiveFileBean> l1 = myNewList;
             final List<ArchiveFileDocumentsBean> l2 = myNewDocumentList;
-            //final List<ArchiveFileBean> l2 = othersNewList;
+            final String[] caseTags = lastFilterTags.clone();
+            final String[] docTags = lastFilterDocumentTags.clone();
             SwingUtilities.invokeAndWait(
                     new Runnable() {
-                public void run() {
+                        @Override
+                        public void run() {
 
-                    //split.setDividerLocation(0.5d);
-                    resultUI.removeAll();
-                    //GridLayout layout = new GridLayout(l1.size(), 1);
-                    BoxLayout layout = new BoxLayout(resultUI, BoxLayout.Y_AXIS);
-                    resultUI.setLayout(layout);
-                    int i = 0;
-                    //ArrayList containedIds = new ArrayList();
-                    for (ArchiveFileBean aFile : l1) {
-                        Color background = DefaultColorTheme.DESKTOP_ENTRY_BACKGROUND;
-                        if (i % 2 == 0) {
-                            background = background.brighter();
-                        }
-                        TaggedEntryPanel ep = new TaggedEntryPanel(background);
-                        
-                        TaggedEntry lce = new TaggedEntry();
-                        lce.setFileNumber(aFile.getFileNumber());
-                        lce.setCaseId(aFile.getId());
-                        lce.setLastChangedBy(aFile.getLawyer());
-                        lce.setName(aFile.getName());
-                        lce.setReason(aFile.getReason());
-                        if (tags.get(aFile.getId()) != null) {
-                            ArrayList<String> xTags = new ArrayList<String>();
-                            for (ArchiveFileTagsBean aftb : tags.get(aFile.getId())) {
-                                xTags.add(aftb.getTagName());
+                            resultUI.removeAll();
+
+                            // remove all tabs except for the first one
+                            for (int i = tagsPane.getTabCount() - 1; i > 0; i--) {
+                                tagsPane.removeTabAt(i);
                             }
-                            Collections.sort(xTags);
-                            lce.setTags(xTags);
-                        }
-                        ep.setEntry(lce);
 
-                        //if (!containedIds.contains(lce.getId())) {
-                        resultUI.add(ep);
-                        i++;
-                        if (i == 50) {
-                            //layout.setRows(i);
+                            BoxLayout layout = new BoxLayout(resultUI, BoxLayout.Y_AXIS);
+                            resultUI.setLayout(layout);
+                            int i = 0;
+
+                            List<String> allTags = new ArrayList<>();
+                            ListMultimap<String, TaggedEntryPanel> tagToTep = ArrayListMultimap.create();
+                            for (ArchiveFileBean aFile : l1) {
+                                Color background = DefaultColorTheme.DESKTOP_ENTRY_BACKGROUND;
+                                if (i % 2 == 0) {
+                                    background = background.brighter();
+                                }
+                                TaggedEntryPanel ep = new TaggedEntryPanel(background);
+
+                                TaggedEntry lce = new TaggedEntry();
+                                lce.setFileNumber(aFile.getFileNumber());
+                                lce.setCaseId(aFile.getId());
+                                lce.setLastChangedBy(aFile.getLawyer());
+                                lce.setName(aFile.getName());
+                                lce.setReason(aFile.getReason());
+                                if (tags.get(aFile.getId()) != null) {
+                                    ArrayList<String> xTags = new ArrayList<>();
+                                    for (ArchiveFileTagsBean aftb : tags.get(aFile.getId())) {
+                                        xTags.add(aftb.getTagName());
+                                        if (!allTags.contains(aftb.getTagName())) {
+                                            allTags.add(aftb.getTagName());
+                                        }
+                                    }
+                                    Collections.sort(xTags);
+                                    lce.setTags(xTags);
+                                }
+                                ep.setEntry(lce);
+
+                                if (tags.get(aFile.getId()) != null) {
+                                    for (ArchiveFileTagsBean aftb : tags.get(aFile.getId())) {
+                                        TaggedEntryPanel tep = new TaggedEntryPanel(background);
+                                        tep.setEntry(lce);
+                                        tagToTep.put(aftb.getTagName(), tep);
+                                    }
+
+                                }
+
+                                resultUI.add(ep);
+                                resultUI.add(Box.createRigidArea(new Dimension(5, 5)));
+                                i++;
+                                if (i == 500) {
+                                    break;
+                                }
+                            }
+
+                            for (ArchiveFileDocumentsBean aDoc : l2) {
+                                Color background = DefaultColorTheme.DESKTOP_ENTRY_BACKGROUND;
+                                if (i % 2 == 0) {
+                                    background = background.brighter();
+                                }
+                                TaggedEntryPanel ep = new TaggedEntryPanel(background);
+                                TaggedEntry lce = new TaggedEntry();
+                                lce.setFileNumber(aDoc.getArchiveFileKey().getFileNumber());
+                                lce.setCaseId(aDoc.getArchiveFileKey().getId());
+                                lce.setDocumentId(aDoc.getId());
+                                lce.setDocumentName(aDoc.getName());
+                                lce.setLastChangedBy(aDoc.getArchiveFileKey().getLawyer());
+                                lce.setName(aDoc.getArchiveFileKey().getName());
+                                lce.setReason(aDoc.getArchiveFileKey().getReason());
+                                if (documentTags.get(aDoc.getId()) != null) {
+                                    ArrayList<String> xTags = new ArrayList<>();
+                                    for (DocumentTagsBean dtb : documentTags.get(aDoc.getId())) {
+                                        xTags.add(dtb.getTagName());
+                                        if (!allTags.contains(dtb.getTagName())) {
+                                            allTags.add(dtb.getTagName());
+                                        }
+                                    }
+                                    Collections.sort(xTags);
+                                    lce.setTags(xTags);
+                                }
+                                ep.setEntry(lce);
+
+                                if (documentTags.get(aDoc.getId()) != null) {
+                                    for (DocumentTagsBean dtb : documentTags.get(aDoc.getId())) {
+                                        TaggedEntryPanel tep = new TaggedEntryPanel(background);
+                                        tep.setEntry(lce);
+                                        tagToTep.put(dtb.getTagName(), tep);
+                                    }
+
+                                }
+
+                                resultUI.add(ep);
+                                resultUI.add(Box.createRigidArea(new Dimension(5, 5)));
+                                i++;
+                                if (i == 500) {
+                                    break;
+                                }
+                            }
+                            StringUtils.sortIgnoreCase(allTags);
+                            allTags.forEach(s -> {
+                                addTagsTab(s);
+                                tagToTep.get(s).forEach(taggedEntryPanel -> addEntryToTab(s, taggedEntryPanel));
+                            });
+
+                            split.setDividerLocation(split.getDividerLocation() + 1);
+                            split.setDividerLocation(split.getDividerLocation() - 1);
                             running = false;
-                            return;
                         }
-                        //    containedIds.add(lce.getId());
-                        //}
-                    }
 
-                    for (ArchiveFileDocumentsBean aDoc : l2) {
-                        Color background = DefaultColorTheme.DESKTOP_ENTRY_BACKGROUND;
-                            if (i % 2 == 0) {
-                                background = background.brighter();
+                        private void addTagsTab(String tagName) {
+                            if (Arrays.asList(caseTags).indexOf(tagName) > -1 || Arrays.asList(docTags).indexOf(tagName) > -1) {
+
+                                boolean hasTab = false;
+                                for (int i = 0; i < tagsPane.getTabCount(); i++) {
+                                    if (tagsPane.getTitleAt(i).equals(tagName)) {
+                                        hasTab = true;
+                                        break;
+                                    }
+                                }
+                                if (!hasTab) {
+                                    JScrollPane scroll = new JScrollPane();
+                                    scroll.getVerticalScrollBar().setUnitIncrement(16);
+
+                                    JPanel tPanel = new JPanel();
+                                    BoxLayout layout = new BoxLayout(tPanel, BoxLayout.Y_AXIS);
+                                    tPanel.setLayout(layout);
+                                    tPanel.setOpaque(false);
+
+                                    scroll.getViewport().add(tPanel);
+                                    scroll.getViewport().setOpaque(false);
+                                    scroll.setBorder(null);
+                                    scroll.setOpaque(false);
+                                    tagsPane.addTab(tagName, scroll);
+                                }
                             }
-                        TaggedEntryPanel ep = new TaggedEntryPanel(background);
-                        TaggedEntry lce = new TaggedEntry();
-                        lce.setFileNumber(aDoc.getArchiveFileKey().getFileNumber());
-                        lce.setCaseId(aDoc.getArchiveFileKey().getId());
-                        lce.setDocumentId(aDoc.getId());
-                        lce.setDocumentName(aDoc.getName());
-                        lce.setLastChangedBy(aDoc.getArchiveFileKey().getLawyer());
-                        lce.setName(aDoc.getArchiveFileKey().getName());
-                        lce.setReason(aDoc.getArchiveFileKey().getReason());
-                        if (documentTags.get(aDoc.getId()) != null) {
-                            ArrayList<String> xTags = new ArrayList<String>();
-                            for (DocumentTagsBean dtb : documentTags.get(aDoc.getId())) {
-                                xTags.add(dtb.getTagName());
+                        }
+
+                        private void addEntryToTab(String tagName, TaggedEntryPanel tep) {
+
+                            for (int i = 0; i < tagsPane.getTabCount(); i++) {
+                                if (tagsPane.getTitleAt(i).equals(tagName)) {
+                                    JScrollPane sp = (JScrollPane) tagsPane.getComponentAt(i);
+                                    JViewport p = (JViewport) sp.getComponent(0);
+                                    ((JPanel) p.getComponent(0)).add(tep);
+                                    ((JPanel) p.getComponent(0)).add(Box.createRigidArea(new Dimension(5, 5)));
+                                    break;
+                                }
                             }
-                            Collections.sort(xTags);
-                            lce.setTags(xTags);
                         }
-                        ep.setEntry(lce);
-
-                        //if (!containedIds.contains(lce.getId())) {
-                        resultUI.add(ep);
-                        i++;
-                        if (i == 50) {
-                            //layout.setRows(i);
-                            running = false;
-                            return;
-                        }
-                        //    containedIds.add(lce.getId());
-                        //}
-                    }
-
-                    //split.setDividerLocation(0.5d);
-                    split.setDividerLocation(split.getDividerLocation() + 1);
-                    split.setDividerLocation(split.getDividerLocation() - 1);
-
-                }
-            });
+                    });
             running = false;
         } catch (Throwable t) {
             log.error(t);

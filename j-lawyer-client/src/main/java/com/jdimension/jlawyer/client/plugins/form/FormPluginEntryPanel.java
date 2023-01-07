@@ -663,56 +663,25 @@
  */
 package com.jdimension.jlawyer.client.plugins.form;
 
-import com.jdimension.jlawyer.client.editors.files.*;
-import com.jdimension.jlawyer.client.bea.BeaAccess;
-import com.jdimension.jlawyer.client.bea.BeaLoginDialog;
-import com.jdimension.jlawyer.client.bea.IdentityPanel;
-import com.jdimension.jlawyer.client.bea.SendBeaMessageDialog;
 import com.jdimension.jlawyer.client.editors.EditorsRegistry;
-import com.jdimension.jlawyer.client.editors.addresses.ConflictOfInterestUtils;
-import com.jdimension.jlawyer.client.editors.addresses.ContactTypeColors;
-import com.jdimension.jlawyer.client.events.ContactUpdatedEvent;
-import com.jdimension.jlawyer.client.events.Event;
-import com.jdimension.jlawyer.client.events.EventBroker;
-import com.jdimension.jlawyer.client.events.EventConsumer;
-import com.jdimension.jlawyer.client.mail.SendEmailDialog;
-import com.jdimension.jlawyer.client.settings.ClientSettings;
-import com.jdimension.jlawyer.client.settings.ServerSettings;
 import com.jdimension.jlawyer.client.utils.FrameUtils;
-import com.jdimension.jlawyer.client.utils.StringUtils;
-import com.jdimension.jlawyer.client.voip.PlaceCallDialog;
-import com.jdimension.jlawyer.client.voip.SendFaxDialog;
-import com.jdimension.jlawyer.client.voip.SendSmsDialog;
-import com.jdimension.jlawyer.persistence.AddressBean;
-import com.jdimension.jlawyer.persistence.ArchiveFileAddressesBean;
-import com.jdimension.jlawyer.persistence.ArchiveFileBean;
-import com.jdimension.jlawyer.persistence.PartyTypeBean;
-import com.jdimension.jlawyer.services.ArchiveFileServiceRemote;
-import com.jdimension.jlawyer.services.JLawyerServiceLocator;
 import java.awt.Color;
-import java.awt.Component;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import javax.swing.DefaultListModel;
 import javax.swing.JDialog;
 import javax.swing.JOptionPane;
-import javax.swing.JPanel;
 import org.apache.log4j.Logger;
-import org.jlawyer.bea.model.Identity;
 import themes.colors.DefaultColorTheme;
 
 /**
  *
  * @author jens
  */
-public class FormPluginEntryPanel extends javax.swing.JPanel implements EventConsumer {
+public class FormPluginEntryPanel extends javax.swing.JPanel {
 
     private static final Logger log = Logger.getLogger(FormPluginEntryPanel.class.getName());
-    //DecimalFormat df = new DecimalFormat("0.00%");
-
+    
     private FormPluginsPanel container = null;
     private FormPlugin plugin = null;
+    private JDialog panelParent=null;
     private int state = -1;
     private FormActionCallback callback=null;
 
@@ -723,17 +692,19 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
 
     /**
      * Creates new form HitPanel
+     * @param parent
+     * @param plugin
+     * @param container
+     * @param callback
      */
-    public FormPluginEntryPanel(FormPlugin plugin, FormPluginsPanel container, FormActionCallback callback) {
+    public FormPluginEntryPanel(JDialog parent, FormPlugin plugin, FormPluginsPanel container, FormActionCallback callback) {
         initComponents();
         this.container = container;
+        this.panelParent=parent;
         this.plugin = plugin;
         this.callback=callback;
 
         this.setEntry(plugin);
-
-//        EventBroker b = EventBroker.getInstance();
-//        b.subscribeConsumer(this, Event.TYPE_CONTACTUPDATED);
     }
 
     public void setState(int state) {
@@ -757,6 +728,10 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
 
                 break;
         }
+        if(state==STATE_INSTALLED)
+            this.cmdSettings.setEnabled(plugin.hasSettings());
+        else
+            this.cmdSettings.setEnabled(false);
 
     }
     
@@ -768,9 +743,6 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
         this.lblVersionInstalled.setText(version);
     }
 
-//    public AddressBean getAdress() {
-//        return this.a;
-//    }
     public void setEntry(FormPlugin plugin) {
         this.lblName.setText(plugin.getName());
         this.lblDescription.setText(plugin.getDescription());
@@ -782,6 +754,7 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
         } else {
             this.lblType.setText("");
         }
+        
     }
 
     /**
@@ -805,6 +778,7 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
         lblUpdated = new javax.swing.JLabel();
         jLabel1 = new javax.swing.JLabel();
         lblVersionInstalled = new javax.swing.JLabel();
+        cmdSettings = new javax.swing.JButton();
 
         mnuDownload.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/fileimport.png"))); // NOI18N
         mnuDownload.setText("installieren");
@@ -824,18 +798,15 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
         });
         actionPopup.add(mnuRemove);
 
-        lblName.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblName.setFont(lblName.getFont().deriveFont(lblName.getFont().getSize()+2f));
         lblName.setText("Pluginname");
         lblName.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
         lblName.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseClicked(java.awt.event.MouseEvent evt) {
-                lblNameMouseClicked(evt);
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                lblNameMouseEntered(evt);
             }
             public void mouseExited(java.awt.event.MouseEvent evt) {
                 lblNameMouseExited(evt);
-            }
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                lblNameMouseEntered(evt);
             }
         });
 
@@ -865,6 +836,14 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
 
         lblVersionInstalled.setText("jLabel2");
 
+        cmdSettings.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/package_system.png"))); // NOI18N
+        cmdSettings.setToolTipText("Einstellungen des Falldatenblattes bearbeiten");
+        cmdSettings.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cmdSettingsActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
@@ -884,12 +863,15 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
                         .addComponent(lblUpdated)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(lblVersionInstalled)
-                        .addGap(0, 166, Short.MAX_VALUE))
-                    .addComponent(lblDescription, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 136, Short.MAX_VALUE)
+                        .addComponent(cmdSettings))
+                    .addGroup(layout.createSequentialGroup()
+                        .addComponent(lblDescription, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(lblType))
                     .addGroup(layout.createSequentialGroup()
                         .addComponent(lblState)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(lblType)))
+                        .addGap(0, 0, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -904,13 +886,14 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
                             .addComponent(lblVersionAvailable)
                             .addComponent(lblUpdated)
                             .addComponent(jLabel1)
-                            .addComponent(lblVersionInstalled))
+                            .addComponent(lblVersionInstalled)
+                            .addComponent(cmdSettings))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(lblDescription)))
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(lblDescription)
+                            .addComponent(lblType))))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(lblState)
-                    .addComponent(lblType))
+                .addComponent(lblState)
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
@@ -923,8 +906,7 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
             this.container.revalidate();
             this.container.repaint();
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            return;
+            JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
     }//GEN-LAST:event_mnuRemoveActionPerformed
@@ -956,10 +938,6 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
         this.lblName.setForeground(Color.BLACK);
     }//GEN-LAST:event_lblNameMouseExited
 
-    private void lblNameMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblNameMouseClicked
-//        this.cmdToAddressActionPerformed(null);
-    }//GEN-LAST:event_lblNameMouseClicked
-
     public void setLastUpdated(String updated) {
         this.lblUpdated.setText(updated);
     }
@@ -985,14 +963,23 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
             }
             this.setState(STATE_INSTALLED);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Laden des Plugins: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            return;
+            JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Laden des Plugins: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_mnuDownloadActionPerformed
+
+    private void cmdSettingsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdSettingsActionPerformed
+        
+        
+        FormPluginSettingsDialog dlg = new FormPluginSettingsDialog(this.panelParent, true, this.plugin);
+        FrameUtils.centerDialog(dlg, this.panelParent);
+        dlg.setVisible(true);
+        
+    }//GEN-LAST:event_cmdSettingsActionPerformed
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JPopupMenu actionPopup;
     private javax.swing.JButton cmdActions;
+    private javax.swing.JButton cmdSettings;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel lblDescription;
     private javax.swing.JLabel lblName;
@@ -1005,18 +992,4 @@ public class FormPluginEntryPanel extends javax.swing.JPanel implements EventCon
     private javax.swing.JMenuItem mnuRemove;
     // End of variables declaration//GEN-END:variables
 
-    @Override
-    public void onEvent(Event e) {
-//        if (e instanceof ContactUpdatedEvent) {
-//            if (this.a != null) {
-//                // can be null in subclass of ArchiveFilePanel
-//                if (this.a.getId() != null) {
-//                    AddressBean eventAddress = ((ContactUpdatedEvent) e).getAddress();
-//                    if (this.a.getId().equals(eventAddress.getId())) {
-//                        this.setEntry(eventAddress, this.afa, false);
-//                    }
-//                }
-//            }
-//        }
-    }
 }

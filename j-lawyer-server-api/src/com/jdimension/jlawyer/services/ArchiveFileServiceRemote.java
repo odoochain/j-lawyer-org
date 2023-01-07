@@ -664,9 +664,11 @@
 package com.jdimension.jlawyer.services;
 
 import com.jdimension.jlawyer.persistence.*;
+import com.jdimension.jlawyer.pojo.DataBucket;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import javax.ejb.Remote;
@@ -685,15 +687,7 @@ public interface ArchiveFileServiceRemote {
 
     void removeArchiveFile(String id) throws Exception;
 
-//    Collection getClients(String archiveFileKey);
-//
-//    Collection getOpponents(String archiveFileKey);
-//
-//    Collection getOpponentAttorneys(String archiveFileKey);
-
     ArchiveFileHistoryBean[] getHistoryForArchiveFile(String archiveFileKey) throws Exception;
-
-    Collection getReviews(String archiveFileKey) throws Exception;
 
     ArchiveFileBean createArchiveFile(ArchiveFileBean dto) throws Exception;
 
@@ -703,8 +697,6 @@ public interface ArchiveFileServiceRemote {
 
     ArchiveFileBean getArchiveFile(String id) throws Exception;
 
-    Collection<ArchiveFileReviewsBean> getAllOpenReviews();
-
     Collection<ArchiveFileDocumentsBean> getDocuments(String archiveFileKey);
 
     boolean archiveFileExists(String id);
@@ -712,8 +704,6 @@ public interface ArchiveFileServiceRemote {
     ArchiveFileBean createArchiveFile(ArchiveFileBean dto, String id) throws Exception;
 
     ArchiveFileDocumentsBean addDocument(String archiveFileId, String fileName, byte[] data, String dictateSign) throws Exception;
-
-    Collection<ArchiveFileReviewsBean> searchReviews(int status, int type, Date fromDate, Date toDate);
 
     int getArchiveFileArchivedCount();
 
@@ -731,12 +721,6 @@ public interface ArchiveFileServiceRemote {
 
     boolean renameDocument(String id, String newName) throws Exception;
 
-    ArchiveFileReviewsBean addReview(String archiveFileId, ArchiveFileReviewsBean review) throws Exception;
-
-    ArchiveFileReviewsBean updateReview(String archiveFileId, ArchiveFileReviewsBean review) throws Exception;
-    
-    void removeReview(String reviewId) throws Exception;
-
     ArchiveFileBean getArchiveFileByFileNumber(String fileNumber) throws Exception;
 
     ArchiveFileHistoryBean addHistory(String archiveFileId, ArchiveFileHistoryBean history) throws Exception;
@@ -747,7 +731,11 @@ public interface ArchiveFileServiceRemote {
 
     Collection<ArchiveFileTagsBean> getTags(String archiveFileId) throws Exception;
     
+    HashMap<String,ArrayList<ArchiveFileTagsBean>> getTags(List<String> archiveFileId) throws Exception;
+    
     Collection<DocumentTagsBean> getDocumentTags(String documentId) throws Exception;
+    
+    HashMap<String,ArrayList<DocumentTagsBean>> getDocumentTags(List<String> documentId) throws Exception;
 
     List<String> searchTagsInUse();
     
@@ -756,8 +744,6 @@ public interface ArchiveFileServiceRemote {
     ArchiveFileBean[] searchEnhanced(String query, boolean withArchive, String[] tagName, String[] documentTagName);
 
     String getDocumentPreview(String id) throws Exception;
-
-    Collection<ArchiveFileReviewsBean> searchReviews(int status, int type, Date fromDate, Date toDate, int limit);
 
     Date[] getHistoryInterval(String principalId);
 
@@ -772,6 +758,8 @@ public interface ArchiveFileServiceRemote {
     Collection<ArchiveFileBean> getAllWithMissingReviews();
 
     byte[] exportCaseToHtml(String caseId) throws Exception;
+    
+    DataBucket loadHtmlCaseExport(String caseId) throws Exception;
 
     List<ArchiveFileBean> getTagged(String[] tagName, String[] docTagName, int limit);
 
@@ -779,9 +767,9 @@ public interface ArchiveFileServiceRemote {
     
     boolean setDocumentFavorite(String id, boolean favorite) throws Exception;
 
-    Hashtable<String,ArrayList<String>> searchTagsEnhanced(String query, boolean withArchive, String[] tagName, String[] documentTagName);
+    HashMap<String,ArrayList<String>> searchTagsEnhanced(String query, boolean withArchive, String[] tagName, String[] documentTagName);
 
-    ArchiveFileDocumentsBean addDocumentFromTemplate(String archiveFileId, String fileName, GenericNode templateFolder, String templateName, Hashtable placeHolderValues, String dictateSign) throws Exception;
+    ArchiveFileDocumentsBean addDocumentFromTemplate(String archiveFileId, String fileName, GenericNode templateFolder, String templateName, HashMap<String,Object> placeHolderValues, String dictateSign) throws Exception;
 
     List<AddressBean> getAddressesForCase(String archiveFileKey) throws Exception;
 
@@ -801,8 +789,6 @@ public interface ArchiveFileServiceRemote {
 
     void renameDocumentTag(String fromName, String toName) throws Exception;
 
-    List<PartyTypeBean> getAllPartyTypes();
-
     List<ArchiveFileGroupsBean> getAllowedGroups(String caseId) throws Exception;
 
     void updateAllowedGroups(String caseId, Collection<Group> allowedGroups) throws Exception;
@@ -811,7 +797,7 @@ public interface ArchiveFileServiceRemote {
 
     List<DocumentFolderTemplate> getAllFolderTemplates();
 
-    void addFolderTemplate(DocumentFolderTemplate template);
+    void addFolderTemplate(DocumentFolderTemplate template) throws Exception;
 
     void removeFolderTemplate(String name);
 
@@ -824,5 +810,41 @@ public interface ArchiveFileServiceRemote {
     void removeFolderFromTemplate(String folderId) throws Exception;
 
     void cloneFolderTemplate(String sourceTemplateName, String targetTemplateName) throws Exception;
+
+    CaseFolder createCaseFolder(String parentId, String name) throws Exception;
+
+    CaseFolder updateCaseFolder(CaseFolder folder) throws Exception;
+
+    void deleteCaseFolder(String folderId) throws Exception;
+
+    void moveDocumentsToFolder(Collection<String> documentIds, String folderId) throws Exception;
+
+    CaseFolder applyFolderTemplate(String caseId, String templateName) throws Exception;
+
+    CaseFolder applyFolderTemplateById(String id, String templateId) throws Exception;
+
+    DocumentFolderTemplate getFolderTemplateById(String id);
+
+    Collection<ArchiveFileDocumentsBean> getDocumentsBin();
+
+    void removeDocumentFromBin(String docId) throws Exception;
+
+    boolean restoreDocumentFromBin(String docId) throws Exception;
+
+    Collection<Keyword> extractKeywordsFromDocument(String docId) throws Exception;
+
+    Collection<Keyword> extractKeywordsFromText(String text) throws Exception;
+
+    void setCaseFolderSettings(String folderId, CaseFolderSettings folderSettings) throws Exception;
+
+    HashMap<String,CaseFolderSettings> getCaseFolderSettings(List<String> folderIds) throws Exception;
+
+    void enableCaseSync(List<String> caseIds, String principalId, boolean enabled) throws Exception;
+
+    List<CaseSyncSettings> getCaseSyncs(String caseId);
+
+    DataBucket getDocumentContentBucket(String id) throws Exception;
+
+    boolean setDocumentHighlights(String id, int highlight1, int highlight2) throws Exception;
 
 }

@@ -691,6 +691,8 @@ public class FormInstancePanel extends javax.swing.JPanel {
 
     /**
      * Creates new form FormInstancePanel
+     * @param container
+     * @param plugin
      */
     public FormInstancePanel(JTabbedPane container, FormPlugin plugin) {
         initComponents();
@@ -703,6 +705,7 @@ public class FormInstancePanel extends javax.swing.JPanel {
         try {
             ui = plugin.getUi();
             this.scrollPlugin.setViewportView(ui);
+            this.scrollPlugin.getVerticalScrollBar().setUnitIncrement(16);
         } catch (Exception ex) {
             log.error("Can not initialize plugin " + plugin.getId(), ex);
             this.scrollPlugin.setViewportView(ui);
@@ -725,7 +728,7 @@ public class FormInstancePanel extends javax.swing.JPanel {
 
         } catch (Throwable t) {
             log.error("Error removing form", t);
-            JOptionPane.showMessageDialog(this, "Fehler beim Laden des Falldatenblattes: " + t.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden des Falldatenblattes: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
     }
@@ -818,7 +821,7 @@ public class FormInstancePanel extends javax.swing.JPanel {
                 this.container.remove(this);
             } catch (Throwable t) {
                 log.error("Error removing form", t);
-                JOptionPane.showMessageDialog(this, "Fehler beim Löschen des Falldatenblattes: " + t.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Fehler beim Löschen des Falldatenblattes: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             }
         }
 
@@ -827,9 +830,10 @@ public class FormInstancePanel extends javax.swing.JPanel {
 
     private void cmdShowPlaceHoldersActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdShowPlaceHoldersActionPerformed
         Hashtable placeHolders = this.plugin.getPlaceHolderValues();
+        Hashtable descriptions = this.plugin.getPlaceHolderDescriptions();
         FormPluginPlaceholderDialog dlg = new FormPluginPlaceholderDialog(EditorsRegistry.getInstance().getMainWindow(), true);
         FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
-        dlg.setPlaceHolders(placeHolders);
+        dlg.setPlaceHolders(placeHolders, descriptions);
         dlg.setVisible(true);
 
     }//GEN-LAST:event_cmdShowPlaceHoldersActionPerformed
@@ -842,7 +846,7 @@ public class FormInstancePanel extends javax.swing.JPanel {
             return;
         }
 
-        ArrayList<ArchiveFileFormEntriesBean> formEntries = new ArrayList<ArchiveFileFormEntriesBean>();
+        ArrayList<ArchiveFileFormEntriesBean> formEntries = new ArrayList<>();
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(ClientSettings.getInstance().getLookupProperties());
             for (Object key : placeHolders.keySet()) {
@@ -857,7 +861,7 @@ public class FormInstancePanel extends javax.swing.JPanel {
             locator.lookupFormsServiceRemote().setFormEntries(this.form.getId(), formEntries);
         } catch (Throwable t) {
             log.error("Error saving form entries", t);
-            JOptionPane.showMessageDialog(this, "Fehler beim Speichern des Falldatenblattes: " + t.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Speichern des Falldatenblattes: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
     }

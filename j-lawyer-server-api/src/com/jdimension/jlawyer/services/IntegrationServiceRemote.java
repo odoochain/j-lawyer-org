@@ -664,10 +664,12 @@
 package com.jdimension.jlawyer.services;
 
 import com.jdimension.jlawyer.email.EmailTemplate;
+import com.jdimension.jlawyer.persistence.IntegrationHook;
 import java.io.File;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Hashtable;
+import java.util.List;
 import javax.ejb.Remote;
 
 /**
@@ -681,11 +683,11 @@ public interface IntegrationServiceRemote {
 
     boolean removeObservedFile(String fileName);
 
-    boolean assignObservedFile(String fileName, String archiveFileId) throws Exception;
+    String assignObservedFile(String fileName, String archiveFileId) throws Exception;
 
     byte[] getObservedFile(String fileName) throws Exception;
 
-    boolean assignObservedFile(String fileName, String archiveFileId, String renameTo) throws Exception;
+    String assignObservedFile(String fileName, String archiveFileId, String renameTo) throws Exception;
 
     Collection getAllEmailTemplateNames();
 
@@ -698,5 +700,19 @@ public interface IntegrationServiceRemote {
     String getObservedFilePreview(String fileName) throws Exception;
 
     boolean validateExternalStorageLocation(String location) throws Exception;
+
+    String[] getHookTypes();
+
+    List<IntegrationHook> getAllIntegrationHooks() throws Exception;
+
+    IntegrationHook addIntegrationHook(IntegrationHook hook) throws Exception;
+
+    IntegrationHook updateIntegrationHook(IntegrationHook hook) throws Exception;
+
+    void removeIntegrationHook(IntegrationHook hook) throws Exception;
+
+    boolean renameObservedFile(String fromName, String toName) throws Exception;
+
+    boolean addObservedFile(String fileName, byte[] data) throws Exception;
     
 }

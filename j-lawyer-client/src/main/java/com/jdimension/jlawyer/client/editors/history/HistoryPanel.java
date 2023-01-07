@@ -746,8 +746,8 @@ public class HistoryPanel extends javax.swing.JPanel implements ThemeableEditor 
 
         } catch (Exception ex) {
             log.error("Error connecting to server", ex);
-            //JOptionPane.showMessageDialog(this.owner, "Verbindungsfehler: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            ThreadUtils.showErrorDialog(this, ex.getMessage(), "Fehler");
+            //JOptionPane.showMessageDialog(this.owner, "Verbindungsfehler: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+            ThreadUtils.showErrorDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
             return;
         }
 
@@ -802,7 +802,7 @@ public class HistoryPanel extends javax.swing.JPanel implements ThemeableEditor 
 
         jLabel18.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons32/history_big.png"))); // NOI18N
 
-        lblPanelTitle.setFont(new java.awt.Font("Dialog", 1, 24)); // NOI18N
+        lblPanelTitle.setFont(lblPanelTitle.getFont().deriveFont(lblPanelTitle.getFont().getStyle() | java.awt.Font.BOLD, lblPanelTitle.getFont().getSize()+12));
         lblPanelTitle.setForeground(new java.awt.Color(255, 255, 255));
         lblPanelTitle.setText("Historienrecherche");
 

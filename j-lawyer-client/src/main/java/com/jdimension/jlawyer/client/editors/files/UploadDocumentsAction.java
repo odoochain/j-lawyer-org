@@ -663,30 +663,22 @@
  */
 package com.jdimension.jlawyer.client.editors.files;
 
-import com.jdimension.jlawyer.client.configuration.UserTableCellRenderer;
 import com.jdimension.jlawyer.client.editors.EditorsRegistry;
 import com.jdimension.jlawyer.client.processing.ProgressIndicator;
 import com.jdimension.jlawyer.client.processing.ProgressableAction;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
-import com.jdimension.jlawyer.client.utils.ComponentUtils;
 import com.jdimension.jlawyer.client.utils.FileUtils;
 import com.jdimension.jlawyer.client.utils.ThreadUtils;
 import com.jdimension.jlawyer.persistence.*;
 import com.jdimension.jlawyer.services.ArchiveFileServiceRemote;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
-import com.jdimension.jlawyer.ui.tagging.ArchiveFileTagActionListener;
-import com.jdimension.jlawyer.ui.tagging.TagToggleButton;
+import com.jdimension.jlawyer.ui.folders.CaseFolderPanel;
 import java.awt.Component;
 import java.io.File;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 import javax.swing.*;
-import javax.swing.table.TableRowSorter;
 import org.apache.log4j.Logger;
 
 /**
@@ -696,25 +688,25 @@ import org.apache.log4j.Logger;
 public class UploadDocumentsAction extends ProgressableAction {
 
     private static final Logger log = Logger.getLogger(UploadDocumentsAction.class.getName());
-    //private JTable table = null;
-    //private SendEmailDialog dlg = null;
-
+    
     private String archiveFileKey;
     private Component owner;
-    private JTable docTarget;
+    private CaseFolderPanel docTarget;
+    private CaseFolder targetFolder=null;
 
     private List<File> files;
 
-    public UploadDocumentsAction(ProgressIndicator i, Component owner, String archiveFileKey, JTable docTarget, List<File> files) {
+    public UploadDocumentsAction(ProgressIndicator i, Component owner, String archiveFileKey, CaseFolderPanel docTarget, List<File> files, CaseFolder targetFolder) {
         super(i, false);
 
         this.archiveFileKey = archiveFileKey;
         this.owner = owner;
         this.docTarget = docTarget;
         this.files = files;
+        this.targetFolder=targetFolder;
 
     }
-
+    
     @Override
     public int getMax() {
         return files.size();
@@ -730,7 +722,6 @@ public class UploadDocumentsAction extends ProgressableAction {
 
         try {
 
-            //if(this.isCancelled())
             ClientSettings settings = ClientSettings.getInstance();
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
             ArchiveFileServiceRemote afs = locator.lookupArchiveFileServiceRemote();
@@ -741,8 +732,7 @@ public class UploadDocumentsAction extends ProgressableAction {
                     if (!f.isDirectory()) {
 
                         byte[] data = FileUtils.readFile(f);
-                        final long dataSize = (long) data.length;
-
+                        
                         String newName = f.getName();
                         boolean documentExists = afs.doesDocumentExist(this.archiveFileKey, newName);
                         while (documentExists) {
@@ -758,34 +748,27 @@ public class UploadDocumentsAction extends ProgressableAction {
                         }
 
                         final ArchiveFileDocumentsBean doc = afs.addDocument(this.archiveFileKey, newName, data, null);
-                        SwingUtilities.invokeLater(new Runnable() {
-                            public void run() {
-                                ArchiveFileDocumentsTableModel m = (ArchiveFileDocumentsTableModel) docTarget.getModel();
-                                m.addRow(new Object[]{doc, false, doc.getName(), "", dataSize});
+//                        persisting the folder for this document is automatically done by this call (not just UI update)
+                        SwingUtilities.invokeLater(() -> {
+                            docTarget.addDocument(doc);
+                            if(targetFolder!=null) {
+                                ArrayList<ArchiveFileDocumentsBean> docs=new ArrayList<>();
+                                docs.add(doc);
+                                docTarget.moveDocumentsToFolder(docs, targetFolder);
                             }
                         });
 
                     }
                 }
             }
-
         } catch (Exception ex) {
             log.error("Error connecting to server", ex);
-            JOptionPane.showMessageDialog(this.indicator, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this.indicator, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             EditorsRegistry.getInstance().clearStatus(true);
             ThreadUtils.setDefaultCursor(this.owner);
 
-            //ThreadUtils.showErrorDialog(this.owner, ex.getMessage(), "Fehler");
             return true;
         }
-
-        SwingUtilities.invokeLater(
-                new Thread(new Runnable() {
-                    public void run() {
-                        ComponentUtils.autoSizeColumns(docTarget);
-
-                    }
-                }));
 
         EditorsRegistry.getInstance().clearStatus(true);
         ThreadUtils.setDefaultCursor(this.owner);

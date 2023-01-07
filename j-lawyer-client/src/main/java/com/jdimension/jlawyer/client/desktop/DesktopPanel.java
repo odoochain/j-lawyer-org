@@ -663,7 +663,6 @@
  */
 package com.jdimension.jlawyer.client.desktop;
 
-import com.jdimension.jlawyer.client.StartupSplashFrame;
 import com.jdimension.jlawyer.client.bea.BeaCheckTimerTask;
 import com.jdimension.jlawyer.client.configuration.UserProfileDialog;
 import com.jdimension.jlawyer.client.drebis.DrebisCheckTimerTask;
@@ -686,22 +685,19 @@ import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.client.settings.UserSettings;
 import com.jdimension.jlawyer.client.utils.ComponentUtils;
 import com.jdimension.jlawyer.client.utils.FrameUtils;
-import com.jdimension.jlawyer.persistence.ArchiveFileBean;
 import com.jdimension.jlawyer.persistence.FaxQueueBean;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Image;
-import java.awt.event.ItemEvent;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.Timer;
 import java.util.TimerTask;
 import javax.swing.BoxLayout;
+import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
-import javax.swing.SwingUtilities;
 import org.apache.log4j.Logger;
 
 /**
@@ -713,11 +709,6 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
     private static final Logger log = Logger.getLogger(DesktopPanel.class.getName());
 
     private Image backgroundImage = null;
-    private ArrayList<ArchiveFileBean> myChanges = new ArrayList();
-    private ArrayList<ArchiveFileBean> otherChanges = new ArrayList();
-
-    private ArrayList<ArchiveFileBean> reviewsDue = new ArrayList();
-    private ArrayList<ArchiveFileBean> tagged = new ArrayList();
 
     private boolean initializing = false;
 
@@ -727,6 +718,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
     public DesktopPanel() {
         this.initializing = true;
         initComponents();
+        
         this.lblNewsStatus.setText(" ");
         this.lblUpdateStatus.setText(" ");
         this.jScrollPane1.getVerticalScrollBar().setUnitIncrement(16);
@@ -757,24 +749,16 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
         ComponentUtils.decorateSplitPane(jSplitPane1, Color.WHITE);
         ComponentUtils.decorateSplitPane(jSplitPane2, Color.WHITE);
         
-        
-        //this.frmMyAppointments.setVisible(false);
         Date now = new Date();
         SimpleDateFormat dfWeekday = new SimpleDateFormat("EEEE");
-        //SimpleDateFormat dfWeekday = new SimpleDateFormat("EEE");
-        //this.lblWeekday.setText("(" + dfWeekday.format(now) + ")");
         SimpleDateFormat dfMonth = new SimpleDateFormat("MMMM");
-        //SimpleDateFormat dfMonth = new SimpleDateFormat("MMM");
-        //this.lblMonth.setText(dfMonth.format(now));
         SimpleDateFormat dfDay = new SimpleDateFormat("dd");
-        //this.lblDay.setText(dfDay.format(now) + ".");
         this.lblDay.setText(dfWeekday.format(now) + " " + dfDay.format(now) + ". " + dfMonth.format(now));
 
         this.jSplitPane1.setDividerLocation(0.5d);
 
         ClientSettings settings = ClientSettings.getInstance();
-        //String h=settings.getConfiguration(ClientSettings.CONF_DESKTOP_MYAPPOINTMENTS_HEIGHT, "100");
-
+        
         UserSettings.getInstance().migrateFrom(settings, UserSettings.CONF_DESKTOP_ONLYMYCASES);
         String temp = UserSettings.getInstance().getSetting(UserSettings.CONF_DESKTOP_ONLYMYCASES, "false");
         if ("true".equalsIgnoreCase(temp)) {
@@ -792,8 +776,6 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
         if ("true".equalsIgnoreCase(temp)) {
             this.chkOnlyMyTagged.setSelected(true);
         }
-
-        //temp = settings.getConfiguration(ClientSettings.CONF_DESKTOP_LASTFILTERTAG, "");
 
         this.initializing = false;
 
@@ -815,21 +797,21 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
         this.pnlLastChanged.setLayout(boxLayout);
         Timer timer2 = new Timer();
         TimerTask lastChangedTask = new LastChangedTimerTask(this, this.pnlLastChanged, this.jSplitPane1);
-        timer2.schedule(lastChangedTask, 1000, 29000);
+        timer2.schedule(lastChangedTask, 1000, 59000);
 
         Timer timer3 = new Timer();
         TimerTask autoUpdateTask = new AutoUpdateTimerTask(this);
-        timer3.schedule(autoUpdateTask, 20000, 24 * 60 * 60 * 1000);
+        timer3.schedule(autoUpdateTask, 20000, 24l * 60l * 60l * 1000l);
 
         Timer timer4 = new Timer();
-        TimerTask revDueTask = new ReviewsDueTimerTask(this, this.pnlRevDue, this.jSplitPane1);
-        timer4.schedule(revDueTask, 1000, 31000);
+        TimerTask revDueTask = new ReviewsDueTimerTask(this, this.tabPaneDue, this.pnlRevDue, this.jSplitPane1);
+        timer4.schedule(revDueTask, 1000, 61000);
 
         BoxLayout boxLayout2=new BoxLayout(this.pnlTagged, BoxLayout.Y_AXIS);
         this.pnlTagged.setLayout(boxLayout2);
         Timer timer5 = new Timer();
-        TimerTask taggedTask = new TaggedTimerTask(this, this.pnlTagged, this.jSplitPane2, this.cmdTagFilter, this.cmdDocumentTagFilter, this.popTagFilter, this.popDocumentTagFilter);
-        timer5.schedule(taggedTask, 1000, 33000);
+        TimerTask taggedTask = new TaggedTimerTask(this, this.tabPaneTagged, this.pnlTagged, this.jSplitPane2, this.cmdTagFilter, this.cmdDocumentTagFilter, this.popTagFilter, this.popDocumentTagFilter);
+        timer5.schedule(taggedTask, 1000, 63000);
 
         Timer timer6 = new Timer();
         TimerTask docObserverTask = new DocumentObserverTask();
@@ -842,7 +824,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
         
         Timer timer8 = new Timer();
         TimerTask drebisCheckTask=new DrebisCheckTimerTask();
-        timer8.schedule(drebisCheckTask, 3500,1000*60*60);
+        timer8.schedule(drebisCheckTask, 3500,1000l*60l*60l);
         
         try {
             Timer timer9 = new Timer();
@@ -855,22 +837,31 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
             
             Timer timer11 = new Timer();
             TimerTask tagsTask3 = new UpdateDocumentTagsTask(this, (EditArchiveFilePanel) EditorsRegistry.getInstance().getEditor(EditArchiveFilePanel.class.getName()));
-            timer11.schedule(tagsTask3, 4500, 60000);
+            timer11.schedule(tagsTask3, 6500, 60000);
         } catch (Throwable t) {
             log.error("Could not set up timer task for automatic tag updates", t);
         }
-        this.jSplitPane1.setDividerLocation(0.5d);
-
-        SwingUtilities.invokeLater(
-                new Runnable() {
+        
+        // pre-load JFileChooser to avoid long load times for the user
+        // see https://stackoverflow.com/questions/49792375/jfilechooser-is-very-slow-when-using-windows-look-and-feel
+        Timer timer12 = new Timer();
+        TimerTask fileChooserPreload=new TimerTask() {
+            @Override
             public void run() {
+                log.info("pre-loading JFileChooser");
+                JFileChooser fc=new JFileChooser();
+                log.info("pre-loading JFileChooser finished");
+            }   
+        };
+        timer12.schedule(fileChooserPreload, 7500);
 
-                jSplitPane1.setDividerLocation(0.5d);
-            }
-
-        }
-        );
         this.jSplitPane1.setDividerLocation(0.5d);
+        
+        ComponentUtils.restoreSplitPane(this.jSplitPane1, this.getClass(), "jSplitPane1");
+        ComponentUtils.restoreSplitPane(this.jSplitPane2, this.getClass(), "jSplitPane2");
+        
+        ComponentUtils.persistSplitPane(this.jSplitPane1, this.getClass(), "jSplitPane1");
+        ComponentUtils.persistSplitPane(this.jSplitPane2, this.getClass(), "jSplitPane2");
 
         UserSettings us = UserSettings.getInstance();
         this.lblUserName.setText(us.getCurrentUser().getPrincipalId());
@@ -890,15 +881,17 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
 //        this.lblArchiveFileCount.setText(""+count);
     }
 
+    @Override
     public void setBackgroundImage(Image image) {
         this.backgroundImage = image;
-//        this.desktopMain.setBackgroundImage(image);
     }
 
+    @Override
     public Image getBackgroundImage() {
         return this.backgroundImage;
     }
 
+    @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
         if (this.backgroundImage != null) {
@@ -919,11 +912,12 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
         jSplitPane1 = new javax.swing.JSplitPane();
         jPanel2 = new javax.swing.JPanel();
         jLabel6 = new javax.swing.JLabel();
+        chkOnlyMyReviews = new javax.swing.JCheckBox();
+        cmdRefreshRevDue = new javax.swing.JButton();
+        tabPaneDue = new javax.swing.JTabbedPane();
         jScrollPane1 = new javax.swing.JScrollPane();
         pnlRevDue = new javax.swing.JPanel();
         jLabel8 = new javax.swing.JLabel();
-        chkOnlyMyReviews = new javax.swing.JCheckBox();
-        cmdRefreshRevDue = new javax.swing.JButton();
         jSplitPane2 = new javax.swing.JSplitPane();
         jPanel1 = new javax.swing.JPanel();
         jLabel5 = new javax.swing.JLabel();
@@ -934,13 +928,14 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
         cmdRefreshLastChanged = new javax.swing.JButton();
         jPanel3 = new javax.swing.JPanel();
         jLabel9 = new javax.swing.JLabel();
-        jScrollPane4 = new javax.swing.JScrollPane();
-        pnlTagged = new javax.swing.JPanel();
-        jLabel10 = new javax.swing.JLabel();
         chkOnlyMyTagged = new javax.swing.JCheckBox();
         cmdRefreshTagged = new javax.swing.JButton();
         cmdTagFilter = new javax.swing.JButton();
         cmdDocumentTagFilter = new javax.swing.JButton();
+        tabPaneTagged = new javax.swing.JTabbedPane();
+        jScrollPane4 = new javax.swing.JScrollPane();
+        pnlTagged = new javax.swing.JPanel();
+        jLabel10 = new javax.swing.JLabel();
         messagesWidget = new com.jdimension.jlawyer.client.desktop.DesktopWidgetPanel();
         lblUnreadMail = new javax.swing.JLabel();
         lblUnreadBea = new javax.swing.JLabel();
@@ -979,10 +974,34 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
 
         jPanel2.setOpaque(false);
 
-        jLabel6.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        jLabel6.setFont(jLabel6.getFont().deriveFont(jLabel6.getFont().getStyle() | java.awt.Font.BOLD, jLabel6.getFont().getSize()+2));
         jLabel6.setForeground(java.awt.Color.white);
         java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/DesktopPanel"); // NOI18N
         jLabel6.setText(bundle.getString("label.due")); // NOI18N
+
+        chkOnlyMyReviews.setFont(chkOnlyMyReviews.getFont().deriveFont(chkOnlyMyReviews.getFont().getStyle() | java.awt.Font.BOLD));
+        chkOnlyMyReviews.setForeground(new java.awt.Color(255, 255, 255));
+        chkOnlyMyReviews.setText("nur meine anzeigen");
+        chkOnlyMyReviews.setOpaque(false);
+        chkOnlyMyReviews.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                chkOnlyMyReviewsActionPerformed(evt);
+            }
+        });
+
+        cmdRefreshRevDue.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_refresh_white_36dp.png"))); // NOI18N
+        cmdRefreshRevDue.setBorder(null);
+        cmdRefreshRevDue.setContentAreaFilled(false);
+        cmdRefreshRevDue.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        cmdRefreshRevDue.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cmdRefreshRevDueActionPerformed(evt);
+            }
+        });
+
+        tabPaneDue.setTabLayoutPolicy(javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT);
+        tabPaneDue.setTabPlacement(javax.swing.JTabbedPane.BOTTOM);
+        tabPaneDue.setFont(tabPaneDue.getFont().deriveFont(tabPaneDue.getFont().getStyle() & ~java.awt.Font.BOLD, tabPaneDue.getFont().getSize()-2));
 
         jScrollPane1.setBorder(null);
         jScrollPane1.setOpaque(false);
@@ -995,24 +1014,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
 
         jScrollPane1.setViewportView(pnlRevDue);
 
-        chkOnlyMyReviews.setForeground(new java.awt.Color(255, 255, 255));
-        chkOnlyMyReviews.setText("nur meine anzeigen");
-        chkOnlyMyReviews.setOpaque(false);
-        chkOnlyMyReviews.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                chkOnlyMyReviewsActionPerformed(evt);
-            }
-        });
-
-        cmdRefreshRevDue.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_refresh_white_36dp.png"))); // NOI18N
-        cmdRefreshRevDue.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(255, 255, 255), 1, true));
-        cmdRefreshRevDue.setContentAreaFilled(false);
-        cmdRefreshRevDue.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
-        cmdRefreshRevDue.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                cmdRefreshRevDueActionPerformed(evt);
-            }
-        });
+        tabPaneDue.addTab("alle", jScrollPane1);
 
         org.jdesktop.layout.GroupLayout jPanel2Layout = new org.jdesktop.layout.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
@@ -1021,13 +1023,13 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
             .add(jPanel2Layout.createSequentialGroup()
                 .addContainerGap()
                 .add(jPanel2Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 350, Short.MAX_VALUE)
                     .add(jPanel2Layout.createSequentialGroup()
                         .add(cmdRefreshRevDue)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(jLabel6)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .add(chkOnlyMyReviews)))
+                        .add(chkOnlyMyReviews))
+                    .add(tabPaneDue))
                 .addContainerGap())
         );
         jPanel2Layout.setVerticalGroup(
@@ -1039,7 +1041,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
                     .add(chkOnlyMyReviews)
                     .add(cmdRefreshRevDue))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 306, Short.MAX_VALUE)
+                .add(tabPaneDue)
                 .addContainerGap())
         );
 
@@ -1052,7 +1054,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
 
         jPanel1.setOpaque(false);
 
-        jLabel5.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        jLabel5.setFont(jLabel5.getFont().deriveFont(jLabel5.getFont().getStyle() | java.awt.Font.BOLD, jLabel5.getFont().getSize()+2));
         jLabel5.setForeground(java.awt.Color.white);
         jLabel5.setText(bundle.getString("label.lastchanged")); // NOI18N
 
@@ -1082,6 +1084,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
 
         jScrollPane3.setViewportView(pnlLastChanged);
 
+        chkOnlyMyCases.setFont(chkOnlyMyCases.getFont().deriveFont(chkOnlyMyCases.getFont().getStyle() | java.awt.Font.BOLD));
         chkOnlyMyCases.setForeground(new java.awt.Color(255, 255, 255));
         chkOnlyMyCases.setText("nur meine anzeigen");
         chkOnlyMyCases.addActionListener(new java.awt.event.ActionListener() {
@@ -1091,7 +1094,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
         });
 
         cmdRefreshLastChanged.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_refresh_white_36dp.png"))); // NOI18N
-        cmdRefreshLastChanged.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(255, 255, 255), 1, true));
+        cmdRefreshLastChanged.setBorder(null);
         cmdRefreshLastChanged.setContentAreaFilled(false);
         cmdRefreshLastChanged.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
         cmdRefreshLastChanged.addActionListener(new java.awt.event.ActionListener() {
@@ -1125,7 +1128,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
                     .add(chkOnlyMyCases)
                     .add(cmdRefreshLastChanged))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jScrollPane3, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 157, Short.MAX_VALUE)
+                .add(jScrollPane3, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 259, Short.MAX_VALUE)
                 .addContainerGap())
         );
 
@@ -1133,9 +1136,64 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
 
         jPanel3.setOpaque(false);
 
-        jLabel9.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        jLabel9.setFont(jLabel9.getFont().deriveFont(jLabel9.getFont().getStyle() | java.awt.Font.BOLD, jLabel9.getFont().getSize()+2));
         jLabel9.setForeground(java.awt.Color.white);
         jLabel9.setText(bundle.getString("label.tagged")); // NOI18N
+
+        chkOnlyMyTagged.setFont(chkOnlyMyTagged.getFont().deriveFont(chkOnlyMyTagged.getFont().getStyle() | java.awt.Font.BOLD));
+        chkOnlyMyTagged.setForeground(new java.awt.Color(255, 255, 255));
+        chkOnlyMyTagged.setText("nur meine anzeigen");
+        chkOnlyMyTagged.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                chkOnlyMyTaggedActionPerformed(evt);
+            }
+        });
+
+        cmdRefreshTagged.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_refresh_white_36dp.png"))); // NOI18N
+        cmdRefreshTagged.setBorder(null);
+        cmdRefreshTagged.setContentAreaFilled(false);
+        cmdRefreshTagged.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        cmdRefreshTagged.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cmdRefreshTaggedActionPerformed(evt);
+            }
+        });
+
+        cmdTagFilter.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_white_36dp.png"))); // NOI18N
+        cmdTagFilter.setToolTipText("Akten-Etiketten");
+        cmdTagFilter.setBorder(null);
+        cmdTagFilter.setContentAreaFilled(false);
+        cmdTagFilter.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        cmdTagFilter.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mousePressed(java.awt.event.MouseEvent evt) {
+                cmdTagFilterMousePressed(evt);
+            }
+        });
+        cmdTagFilter.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cmdTagFilterActionPerformed(evt);
+            }
+        });
+
+        cmdDocumentTagFilter.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_white_36dp.png"))); // NOI18N
+        cmdDocumentTagFilter.setToolTipText("Dokument-Etiketten");
+        cmdDocumentTagFilter.setBorder(null);
+        cmdDocumentTagFilter.setContentAreaFilled(false);
+        cmdDocumentTagFilter.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        cmdDocumentTagFilter.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mousePressed(java.awt.event.MouseEvent evt) {
+                cmdDocumentTagFilterMousePressed(evt);
+            }
+        });
+        cmdDocumentTagFilter.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cmdDocumentTagFilterActionPerformed(evt);
+            }
+        });
+
+        tabPaneTagged.setTabLayoutPolicy(javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT);
+        tabPaneTagged.setTabPlacement(javax.swing.JTabbedPane.BOTTOM);
+        tabPaneTagged.setFont(tabPaneTagged.getFont().deriveFont(tabPaneTagged.getFont().getStyle() & ~java.awt.Font.BOLD, tabPaneTagged.getFont().getSize()-2));
 
         jScrollPane4.setBorder(null);
         jScrollPane4.setOpaque(false);
@@ -1163,55 +1221,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
 
         jScrollPane4.setViewportView(pnlTagged);
 
-        chkOnlyMyTagged.setForeground(new java.awt.Color(255, 255, 255));
-        chkOnlyMyTagged.setText("nur meine anzeigen");
-        chkOnlyMyTagged.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                chkOnlyMyTaggedActionPerformed(evt);
-            }
-        });
-
-        cmdRefreshTagged.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_refresh_white_36dp.png"))); // NOI18N
-        cmdRefreshTagged.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(255, 255, 255), 1, true));
-        cmdRefreshTagged.setContentAreaFilled(false);
-        cmdRefreshTagged.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
-        cmdRefreshTagged.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                cmdRefreshTaggedActionPerformed(evt);
-            }
-        });
-
-        cmdTagFilter.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_white_36dp.png"))); // NOI18N
-        cmdTagFilter.setToolTipText("Akten-Etiketten");
-        cmdTagFilter.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(255, 255, 255), 1, true));
-        cmdTagFilter.setContentAreaFilled(false);
-        cmdTagFilter.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
-        cmdTagFilter.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mousePressed(java.awt.event.MouseEvent evt) {
-                cmdTagFilterMousePressed(evt);
-            }
-        });
-        cmdTagFilter.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                cmdTagFilterActionPerformed(evt);
-            }
-        });
-
-        cmdDocumentTagFilter.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_white_36dp.png"))); // NOI18N
-        cmdDocumentTagFilter.setToolTipText("Dokument-Etiketten");
-        cmdDocumentTagFilter.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(255, 255, 255), 1, true));
-        cmdDocumentTagFilter.setContentAreaFilled(false);
-        cmdDocumentTagFilter.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
-        cmdDocumentTagFilter.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mousePressed(java.awt.event.MouseEvent evt) {
-                cmdDocumentTagFilterMousePressed(evt);
-            }
-        });
-        cmdDocumentTagFilter.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                cmdDocumentTagFilterActionPerformed(evt);
-            }
-        });
+        tabPaneTagged.addTab("alle", jScrollPane4);
 
         org.jdesktop.layout.GroupLayout jPanel3Layout = new org.jdesktop.layout.GroupLayout(jPanel3);
         jPanel3.setLayout(jPanel3Layout);
@@ -1224,13 +1234,13 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
                         .add(cmdRefreshTagged)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(jLabel9)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .add(chkOnlyMyTagged)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(cmdTagFilter)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(cmdDocumentTagFilter))
-                    .add(jScrollPane4))
+                        .add(cmdDocumentTagFilter)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 230, Short.MAX_VALUE)
+                        .add(chkOnlyMyTagged))
+                    .add(tabPaneTagged))
                 .addContainerGap())
         );
         jPanel3Layout.setVerticalGroup(
@@ -1240,12 +1250,12 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
                 .add(jPanel3Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(jPanel3Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                         .add(jLabel9)
-                        .add(cmdRefreshTagged)
-                        .add(chkOnlyMyTagged))
+                        .add(cmdRefreshTagged))
                     .add(cmdTagFilter)
-                    .add(cmdDocumentTagFilter))
+                    .add(cmdDocumentTagFilter)
+                    .add(chkOnlyMyTagged))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jScrollPane4, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 87, Short.MAX_VALUE)
+                .add(tabPaneTagged, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 48, Short.MAX_VALUE)
                 .addContainerGap())
         );
 
@@ -1253,14 +1263,14 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
 
         jSplitPane1.setLeftComponent(jSplitPane2);
 
-        lblUnreadMail.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblUnreadMail.setFont(lblUnreadMail.getFont().deriveFont(lblUnreadMail.getFont().getStyle() | java.awt.Font.BOLD, lblUnreadMail.getFont().getSize()+2));
         lblUnreadMail.setForeground(java.awt.Color.white);
         lblUnreadMail.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         lblUnreadMail.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/Icons2-30.png"))); // NOI18N
         lblUnreadMail.setText("0");
         lblUnreadMail.setEnabled(false);
 
-        lblUnreadBea.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblUnreadBea.setFont(lblUnreadBea.getFont().deriveFont(lblUnreadBea.getFont().getStyle() | java.awt.Font.BOLD, lblUnreadBea.getFont().getSize()+2));
         lblUnreadBea.setForeground(java.awt.Color.white);
         lblUnreadBea.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         lblUnreadBea.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/Icons2-16.png"))); // NOI18N
@@ -1268,31 +1278,31 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
         lblUnreadBea.setToolTipText("noch nicht eingeloggt");
         lblUnreadBea.setEnabled(false);
 
-        lblScans.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblScans.setFont(lblScans.getFont().deriveFont(lblScans.getFont().getStyle() | java.awt.Font.BOLD, lblScans.getFont().getSize()+2));
         lblScans.setForeground(java.awt.Color.white);
         lblScans.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         lblScans.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/scanner_big.png"))); // NOI18N
         lblScans.setText("0");
         lblScans.setEnabled(false);
 
-        lblUnreadDrebis.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblUnreadDrebis.setFont(lblUnreadDrebis.getFont().deriveFont(lblUnreadDrebis.getFont().getStyle() | java.awt.Font.BOLD, lblUnreadDrebis.getFont().getSize()+2));
         lblUnreadDrebis.setForeground(java.awt.Color.white);
         lblUnreadDrebis.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         lblUnreadDrebis.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/Icons2-17.png"))); // NOI18N
         lblUnreadDrebis.setText("?");
         lblUnreadDrebis.setEnabled(false);
 
-        lblUpdateStatus.setFont(new java.awt.Font("Dialog", 0, 12)); // NOI18N
+        lblUpdateStatus.setFont(lblUpdateStatus.getFont().deriveFont(lblUpdateStatus.getFont().getStyle() & ~java.awt.Font.BOLD));
         lblUpdateStatus.setForeground(java.awt.Color.white);
         lblUpdateStatus.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
         lblUpdateStatus.setText("???");
 
-        lblNewsStatus.setFont(new java.awt.Font("Dialog", 0, 12)); // NOI18N
+        lblNewsStatus.setFont(lblNewsStatus.getFont().deriveFont(lblNewsStatus.getFont().getStyle() & ~java.awt.Font.BOLD));
         lblNewsStatus.setForeground(java.awt.Color.white);
         lblNewsStatus.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
         lblNewsStatus.setText("???");
 
-        lblFaxStatus.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblFaxStatus.setFont(lblFaxStatus.getFont().deriveFont(lblFaxStatus.getFont().getStyle() | java.awt.Font.BOLD, lblFaxStatus.getFont().getSize()+2));
         lblFaxStatus.setForeground(new java.awt.Color(255, 0, 0));
         lblFaxStatus.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/fax_big.png"))); // NOI18N
         lblFaxStatus.setText("?");
@@ -1330,22 +1340,27 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
                 .add(lblNewsStatus, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 40, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
         );
 
+        lblArchiveFileCount.setFont(lblArchiveFileCount.getFont().deriveFont(lblArchiveFileCount.getFont().getStyle() | java.awt.Font.BOLD));
         lblArchiveFileCount.setForeground(java.awt.Color.white);
         lblArchiveFileCount.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_folder_white_36dp.png"))); // NOI18N
         lblArchiveFileCount.setText(bundle.getString("totals.cases")); // NOI18N
 
+        lblArchiveFileArchivedCount.setFont(lblArchiveFileArchivedCount.getFont().deriveFont(lblArchiveFileArchivedCount.getFont().getStyle() | java.awt.Font.BOLD));
         lblArchiveFileArchivedCount.setForeground(java.awt.Color.white);
         lblArchiveFileArchivedCount.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_folder_white_36dp.png"))); // NOI18N
         lblArchiveFileArchivedCount.setText(bundle.getString("totals.cases.archive")); // NOI18N
 
+        lblAddressCount.setFont(lblAddressCount.getFont().deriveFont(lblAddressCount.getFont().getStyle() | java.awt.Font.BOLD));
         lblAddressCount.setForeground(java.awt.Color.white);
         lblAddressCount.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_perm_contact_calendar_white_36dp.png"))); // NOI18N
         lblAddressCount.setText(bundle.getString("totals.addresses")); // NOI18N
 
+        lblDocumentCount.setFont(lblDocumentCount.getFont().deriveFont(lblDocumentCount.getFont().getStyle() | java.awt.Font.BOLD));
         lblDocumentCount.setForeground(java.awt.Color.white);
         lblDocumentCount.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_insert_drive_file_white_36dp.png"))); // NOI18N
         lblDocumentCount.setText(bundle.getString("totals.documents")); // NOI18N
 
+        lblVoipBalance.setFont(lblVoipBalance.getFont().deriveFont(lblVoipBalance.getFont().getStyle() | java.awt.Font.BOLD));
         lblVoipBalance.setForeground(java.awt.Color.white);
         lblVoipBalance.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_print_white_36dp.png"))); // NOI18N
         lblVoipBalance.setText(bundle.getString("voip.balance")); // NOI18N
@@ -1388,7 +1403,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
             }
         });
 
-        lblUserName.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblUserName.setFont(lblUserName.getFont().deriveFont(lblUserName.getFont().getStyle() | java.awt.Font.BOLD, lblUserName.getFont().getSize()+2));
         lblUserName.setForeground(new java.awt.Color(255, 255, 255));
         lblUserName.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         lblUserName.setText("My User Name");
@@ -1418,7 +1433,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
                 .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
-        lblDay.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblDay.setFont(lblDay.getFont().deriveFont(lblDay.getFont().getStyle() | java.awt.Font.BOLD, lblDay.getFont().getSize()+2));
         lblDay.setForeground(new java.awt.Color(255, 255, 255));
         lblDay.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         lblDay.setText("28");
@@ -1436,7 +1451,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
                         .add(lblDay, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(desktopWidgetPanel2, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                    .add(jSplitPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 984, Short.MAX_VALUE)
+                    .add(jSplitPane1)
                     .add(systemInformationWidget, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addContainerGap())
         );
@@ -1463,7 +1478,6 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
 
     private void formComponentResized(java.awt.event.ComponentEvent evt) {//GEN-FIRST:event_formComponentResized
         // TODO add your handling code here:
-        this.jSplitPane1.setDividerLocation(0.5d);
     }//GEN-LAST:event_formComponentResized
 
     public void updateUserIcon() {
@@ -1473,16 +1487,12 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
 
     private void lblUserIconMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblUserIconMouseClicked
         UserProfileDialog dlg = new UserProfileDialog(EditorsRegistry.getInstance().getMainWindow(), true);
-        //dlg.setTitle("Anreden");
-        //dlg.setOptionGroup(OptionConstants.OPTIONGROUP_SALUTATIONS);
         FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
         dlg.setVisible(true);
     }//GEN-LAST:event_lblUserIconMouseClicked
 
     private void lblUserNameMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblUserNameMouseClicked
         UserProfileDialog dlg = new UserProfileDialog(EditorsRegistry.getInstance().getMainWindow(), true);
-        //dlg.setTitle("Anreden");
-        //dlg.setOptionGroup(OptionConstants.OPTIONGROUP_SALUTATIONS);
         FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
         dlg.setVisible(true);
     }//GEN-LAST:event_lblUserNameMouseClicked
@@ -1514,7 +1524,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
         boolean onlyMyReviews = this.chkOnlyMyReviews.isSelected();
         settings.setSetting(UserSettings.CONF_DESKTOP_ONLYMYREVIEWS, "" + onlyMyReviews);
 
-        TimerTask revDueTask = new ReviewsDueTimerTask(this, this.pnlRevDue, this.jSplitPane1, true);
+        TimerTask revDueTask = new ReviewsDueTimerTask(this, this.tabPaneDue, this.pnlRevDue, this.jSplitPane1, true);
         new Timer().schedule(revDueTask, 500);
 
     }//GEN-LAST:event_chkOnlyMyReviewsActionPerformed
@@ -1530,7 +1540,7 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
     private void cmdRefreshRevDueActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdRefreshRevDueActionPerformed
         Timer timer = new Timer();
 
-        TimerTask revDueTask = new ReviewsDueTimerTask(this, this.pnlRevDue, this.jSplitPane1, true);
+        TimerTask revDueTask = new ReviewsDueTimerTask(this, this.tabPaneDue, this.pnlRevDue, this.jSplitPane1, true);
         timer.schedule(revDueTask, 10);
     }//GEN-LAST:event_cmdRefreshRevDueActionPerformed
 
@@ -1544,14 +1554,14 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
         boolean onlyMyTagged = this.chkOnlyMyTagged.isSelected();
         settings.setSetting(UserSettings.CONF_DESKTOP_ONLYMYTAGGED, "" + onlyMyTagged);
 
-        TimerTask taggedTask = new TaggedTimerTask(this, this.pnlTagged, this.jSplitPane2, this.cmdTagFilter, this.cmdDocumentTagFilter, this.popTagFilter, this.popDocumentTagFilter, true);
+        TimerTask taggedTask = new TaggedTimerTask(this, this.tabPaneTagged, this.pnlTagged, this.jSplitPane2, this.cmdTagFilter, this.cmdDocumentTagFilter, this.popTagFilter, this.popDocumentTagFilter, true);
         new Timer().schedule(taggedTask, 500);
     }//GEN-LAST:event_chkOnlyMyTaggedActionPerformed
 
     private void cmdRefreshTaggedActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdRefreshTaggedActionPerformed
 
         Timer timer = new Timer();
-        TimerTask taggedTask = new TaggedTimerTask(this, this.pnlTagged, this.jSplitPane2, this.cmdTagFilter, this.cmdDocumentTagFilter, this.popTagFilter, this.popDocumentTagFilter, true);
+        TimerTask taggedTask = new TaggedTimerTask(this, this.tabPaneTagged, this.pnlTagged, this.jSplitPane2, this.cmdTagFilter, this.cmdDocumentTagFilter, this.popTagFilter, this.popDocumentTagFilter, true);
         timer.schedule(taggedTask, 10);
     }//GEN-LAST:event_cmdRefreshTaggedActionPerformed
 
@@ -1618,11 +1628,12 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
     private javax.swing.JPopupMenu popDocumentTagFilter;
     private javax.swing.JPopupMenu popTagFilter;
     private com.jdimension.jlawyer.client.desktop.DesktopWidgetPanel systemInformationWidget;
+    private javax.swing.JTabbedPane tabPaneDue;
+    private javax.swing.JTabbedPane tabPaneTagged;
     // End of variables declaration//GEN-END:variables
 
     @Override
     public void onEvent(Event e) {
-        //System.out.println("Consumed event with type " + e.getType());
         if (e instanceof AutoUpdateEvent) {
 
             this.lblUpdateStatus.setIcon(((AutoUpdateEvent) e).getIcon());
@@ -1630,6 +1641,8 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
             this.lblUpdateStatus.addMouseListener(((AutoUpdateEvent) e).getMouseListener());
             this.lblUpdateStatus.setText("1 Update");
             this.lblUpdateStatus.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+            this.revalidate();
+            this.repaint();
             
         } else if (e instanceof NewsEvent) {
             this.lblNewsStatus.setIcon(((NewsEvent) e).getIcon());
@@ -1637,21 +1650,23 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
             this.lblNewsStatus.addMouseListener(((NewsEvent) e).getMouseListener());
             this.lblNewsStatus.setText("News");
             this.lblNewsStatus.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+            this.revalidate();
+            this.repaint();
         } else if (e instanceof ScannerStatusEvent) {
-            //this.lblScans.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/scanner_big.png")));
             this.lblScans.setText("" + ((ScannerStatusEvent) e).getFileNames().size());
             this.lblScans.setToolTipText(((ScannerStatusEvent) e).getFileNames().size() + " " + java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/editors/EditorsRegistry").getString("status.scansfound"));
             if(((ScannerStatusEvent) e).getFileNames().size()>0)
                 this.lblScans.setEnabled(true);
             else
                 this.lblScans.setEnabled(false);
+            this.revalidate();
+            this.repaint();
         } else if (e instanceof FaxFailedEvent) {
             FaxQueueBean fb = ((FaxFailedEvent) e).getFax();
-            JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fax an " + fb.getRemoteName() + " konnte nicht gesendet werden!", "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fax an " + fb.getRemoteName() + " konnte nicht gesendet werden!", com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         } else if (e instanceof FaxStatusEvent) {
 
             this.lblFaxStatus.setText(" " + ((FaxStatusEvent) e).getFaxList().size());
-            //this.lblFaxStatus.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/fax_big.png")));
             if (((FaxStatusEvent) e).getFailed() > 0) {
 
                 String failedFaxesCaption = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/editors/EditorsRegistry").getString("caption.failedfaxes");
@@ -1669,20 +1684,28 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
             else
                 this.lblFaxStatus.setEnabled(false);
 
+            this.revalidate();
+            this.repaint();
+            
         } else if (e instanceof EmailStatusEvent) {
-            //this.lblUnreadMail.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/Icons2-30.png")));
             this.lblUnreadMail.setText("" + ((EmailStatusEvent) e).getUnread());
             this.lblUnreadMail.setToolTipText(((EmailStatusEvent) e).getUnread() + " " + java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/editors/EditorsRegistry").getString("status.unreadmails"));
             this.lblUnreadMail.setEnabled(true);
+            
+            this.revalidate();
+            this.repaint();
         } else if(e instanceof BeaStatusEvent) {
             this.lblUnreadBea.setEnabled(true);
             if(((BeaStatusEvent) e).getUnread()>0) {
-                this.lblUnreadBea.setText("!");
-                this.lblUnreadBea.setToolTipText("es gibt ungelesene beA-Nachrichten");
+                this.lblUnreadBea.setText("" + ((BeaStatusEvent) e).getUnread());
+                this.lblUnreadBea.setToolTipText("" + ((BeaStatusEvent) e).getUnread() + " ungelesene beA-Nachricht(en)");
             } else {
                 this.lblUnreadBea.setText("");
                 this.lblUnreadBea.setToolTipText("keine ungelesenen beA-Nachrichten");
             }
+            
+            this.revalidate();
+            this.repaint();
         } else if(e instanceof DrebisStatusEvent) {
             
             if(((DrebisStatusEvent) e).getMessages()>0) {
@@ -1693,6 +1716,9 @@ public class DesktopPanel extends javax.swing.JPanel implements ThemeableEditor,
                 this.lblUnreadDrebis.setText("");
                 this.lblUnreadDrebis.setToolTipText("keine ungelesenen Drebis-Nachrichten");
             }
+            
+            this.revalidate();
+            this.repaint();
         }
     }
 

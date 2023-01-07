@@ -663,7 +663,6 @@ For more information on this, and how to apply and follow the GNU AGPL, see
  */
 package com.jdimension.jlawyer.client.plugins.form;
 
-import com.jdimension.jlawyer.client.plugins.calculation.*;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.client.utils.FileUtils;
 import com.jdimension.jlawyer.client.utils.VersionUtils;
@@ -672,8 +671,6 @@ import com.jdimension.jlawyer.persistence.FormTypeArtefactBean;
 import com.jdimension.jlawyer.persistence.FormTypeBean;
 import com.jdimension.jlawyer.services.FormsServiceRemote;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
-import groovy.lang.Binding;
-import groovy.swing.SwingBuilder;
 import groovy.util.GroovyScriptEngine;
 import java.io.File;
 import java.io.FileWriter;
@@ -683,7 +680,6 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Hashtable;
-import java.util.List;
 import javax.swing.JPanel;
 import org.apache.log4j.Logger;
 
@@ -709,6 +705,8 @@ public class FormPlugin implements Comparable {
     private String type = null;
     private String[] dependsOn = new String[0];
     private ArrayList<String> files = new ArrayList<String>();
+    
+    protected ArrayList<FormPluginSetting> settings=new ArrayList<>();
 
     Class scriptClass = null;
     Object scriptInstance = null;
@@ -722,16 +720,12 @@ public class FormPlugin implements Comparable {
 
             ArrayList<String> result = ((FormPluginMethods) scriptInstance).getPlaceHolders(this.placeHolder);
 
-            //Object result = scriptClass.getDeclaredMethod("getPlaceHolders", new Class[]{String.class}).invoke(scriptInstance, new Object[]{this.placeHolder});
             return result;
-//            System.out.println(result.toString());
-//            result = scriptClass.getDeclaredMethod("setResult", new Class[]{List.class}).invoke(scriptInstance, new Object[]{(List) result});
-//            System.out.println(result.toString());
 
         } catch (Throwable t) {
-            t.printStackTrace();
+            log.error(t);
         }
-        return new ArrayList<String>();
+        return new ArrayList<>();
     }
 
     public Hashtable getPlaceHolderValues() {
@@ -742,7 +736,20 @@ public class FormPlugin implements Comparable {
             return result;
 
         } catch (Throwable t) {
-            t.printStackTrace();
+            log.error(t);
+            return null;
+        }
+    }
+    
+    public Hashtable getPlaceHolderDescriptions() {
+        try {
+
+            Hashtable result = ((FormPluginMethods) scriptInstance).getPlaceHolderDescriptions(this.placeHolder);
+
+            return result;
+
+        } catch (Throwable t) {
+            log.error(t);
             return null;
         }
     }
@@ -753,16 +760,11 @@ public class FormPlugin implements Comparable {
             ((FormPluginMethods) scriptInstance).setPlaceHolderValues(this.placeHolder, placeHolders);
 
         } catch (Throwable t) {
-            t.printStackTrace();
+            log.error(t);
         }
     }
 
     public JPanel getUi() throws Exception {
-//        GroovyScriptEngine e = new GroovyScriptEngine(FormPluginUtil.getLocalDirectory() + File.separator);
-//        Binding bind = new Binding();
-//        bind.setVariable("callback", new GenericCalculationCallback());
-//        e.run(getId() + "_ui.groovy", bind);
-//        return (JPanel) bind.getVariable("SCRIPTPANEL");
 
         if (ui != null) {
             return ui;
@@ -773,10 +775,6 @@ public class FormPlugin implements Comparable {
             this.scriptClass = new GroovyScriptEngine(FormPluginUtil.getLocalDirectory() + File.separator).loadScriptByName(getId() + "_ui.groovy");
             this.scriptInstance = scriptClass.newInstance();
             Object result = scriptClass.getDeclaredMethod("getUi", new Class[]{}).invoke(scriptInstance, new Object[]{});
-//            ArrayList list=new ArrayList();
-//            list.add("schnuff");
-//            list.add("bluff");
-//            scriptClass.getDeclaredMethod("setResult", new Class[]{List.class}).invoke(scriptInstance, new Object[]{list});
 
             this.ui = (JPanel) result;
 
@@ -785,46 +783,18 @@ public class FormPlugin implements Comparable {
                 ((FormPluginMethods) scriptInstance).setCallback(new FormPluginCallback(caseDto));
 
             } catch (Throwable t) {
-                t.printStackTrace();
+                log.error(t);
             }
 
             return ui;
-//            System.out.println(result.toString());
-//            result = scriptClass.getDeclaredMethod("setResult", new Class[]{List.class}).invoke(scriptInstance, new Object[]{(List) result});
-//            System.out.println(result.toString());
 
         } catch (Throwable t) {
+            log.error("error loading form plugin", t);
             t.printStackTrace();
         }
         return null;
     }
 
-    /*
-    public JPanel getUi(ArchiveFileBean targetCase, float claimValue) throws Exception {
-//        GroovyScriptEngine e = new GroovyScriptEngine(FormPluginUtil.getLocalDirectory() + File.separator);
-//        Binding bind = new Binding();
-//        bind.setVariable("callback", new GenericCalculationCallback(targetCase));
-//        bind.setVariable("claimvalue", claimValue);
-//        e.run(getId() + "_ui.groovy", bind);
-//        return (JPanel) bind.getVariable("SCRIPTPANEL");
-
-        try {
-
-            Class scriptClass = new GroovyScriptEngine(FormPluginUtil.getLocalDirectory() + File.separator).loadScriptByName(getId() + "_ui.groovy");
-            Object scriptInstance = scriptClass.newInstance();
-            Object result = scriptClass.getDeclaredMethod("getUi", new Class[]{}).invoke(scriptInstance, new Object[]{});
-            return (JPanel) result;
-//            System.out.println(result.toString());
-//            result = scriptClass.getDeclaredMethod("setResult", new Class[]{List.class}).invoke(scriptInstance, new Object[]{(List) result});
-//            System.out.println(result.toString());
-
-        } catch (Throwable t) {
-            t.printStackTrace();
-        }
-        return null;
-
-    }
-     */
     private FormTypeBean toFormTypeBean() {
         FormTypeBean ftb = new FormTypeBean();
         ftb.setId(this.id);
@@ -837,8 +807,8 @@ public class FormPlugin implements Comparable {
 
     public void update() throws Exception {
         try {
-            ClientSettings settings = ClientSettings.getInstance();
-            JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+            ClientSettings cSettings = ClientSettings.getInstance();
+            JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(cSettings.getLookupProperties());
             FormsServiceRemote forms = locator.lookupFormsServiceRemote();
 
             FormTypeBean newFormType = forms.getFormType(this.id);
@@ -868,7 +838,7 @@ public class FormPlugin implements Comparable {
 
                 char[] buffer = new char[1024];
                 int len = 0;
-                StringBuffer sb = new StringBuffer();
+                StringBuilder sb = new StringBuilder();
                 while ((len = reader.read(buffer)) > -1) {
                     sb.append(buffer, 0, len);
                 }
@@ -876,9 +846,9 @@ public class FormPlugin implements Comparable {
                 is.close();
                 String content = sb.toString();
 
-                FileWriter fw = new FileWriter(localFileLocation);
-                fw.write(content);
-                fw.close();
+                try (FileWriter fw = new FileWriter(localFileLocation)) {
+                    fw.write(content);
+                }
 
                 FormTypeArtefactBean newArtefact = new FormTypeArtefactBean();
                 newArtefact.setContent(FileUtils.readFile(localFile));
@@ -897,8 +867,8 @@ public class FormPlugin implements Comparable {
 
     public void remove() throws Exception {
         try {
-            ClientSettings settings = ClientSettings.getInstance();
-            JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+            ClientSettings cSettings = ClientSettings.getInstance();
+            JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(cSettings.getLookupProperties());
             FormsServiceRemote forms = locator.lookupFormsServiceRemote();
 
             forms.removeFormType(this.id);
@@ -912,8 +882,8 @@ public class FormPlugin implements Comparable {
     public void install() throws Exception {
 
         try {
-            ClientSettings settings = ClientSettings.getInstance();
-            JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+            ClientSettings cSettings = ClientSettings.getInstance();
+            JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(cSettings.getLookupProperties());
             FormsServiceRemote forms = locator.lookupFormsServiceRemote();
 
             FormTypeBean newFormType = forms.addFormType(this.toFormTypeBean());
@@ -937,7 +907,7 @@ public class FormPlugin implements Comparable {
 
                 char[] buffer = new char[1024];
                 int len = 0;
-                StringBuffer sb = new StringBuffer();
+                StringBuilder sb = new StringBuilder();
                 while ((len = reader.read(buffer)) > -1) {
                     sb.append(buffer, 0, len);
                 }
@@ -945,9 +915,9 @@ public class FormPlugin implements Comparable {
                 is.close();
                 String content = sb.toString();
 
-                FileWriter fw = new FileWriter(localFileLocation);
-                fw.write(content);
-                fw.close();
+                try (FileWriter fw = new FileWriter(localFileLocation)) {
+                    fw.write(content);
+                }
 
                 FormTypeArtefactBean newArtefact = new FormTypeArtefactBean();
                 newArtefact.setContent(FileUtils.readFile(localFile));
@@ -1134,6 +1104,24 @@ public class FormPlugin implements Comparable {
      */
     public void setCaseDto(ArchiveFileBean caseDto) {
         this.caseDto = caseDto;
+    }
+
+    /**
+     * @return the settings
+     */
+    public ArrayList<FormPluginSetting> getSettings() {
+        return settings;
+    }
+    
+    public boolean hasSettings() {
+        return !(this.settings.isEmpty());
+    }
+
+    /**
+     * @param settings the settings to set
+     */
+    public void setSettings(ArrayList<FormPluginSetting> settings) {
+        this.settings = settings;
     }
 
 }

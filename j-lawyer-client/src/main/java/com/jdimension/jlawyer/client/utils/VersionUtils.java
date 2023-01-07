@@ -665,9 +665,6 @@ package com.jdimension.jlawyer.client.utils;
 
 import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.URL;
 import org.apache.log4j.Logger;
 
 /**
@@ -679,7 +676,7 @@ public class VersionUtils {
     private static final Logger log = Logger.getLogger(VersionUtils.class.getName());
 
     public static String getClientVersion() {
-        return "1.13";
+        return "2.3";
     }
 
     public static String getPatchLevel() {
@@ -703,28 +700,28 @@ public class VersionUtils {
         String patch="0";
         String build="0";
         
-        if(v.indexOf(".")>-1) {
+        if(v.contains(".")) {
             major=v.substring(0, v.indexOf("."));
             v=v.substring(v.indexOf(".")+1, v.length());
         } else if (v.length()>0) {
             major=v;
         }
         
-        if(v.indexOf(".")>-1) {
+        if(v.contains(".")) {
             minor=v.substring(0, v.indexOf("."));
             v=v.substring(v.indexOf(".")+1, v.length());
         } else if (v.length()>0) {
             minor=v;
         }
         
-        if(v.indexOf(".")>-1) {
+        if(v.contains(".")) {
             patch=v.substring(0, v.indexOf("."));
             v=v.substring(v.indexOf(".")+1, v.length());
         } else if (v.length()>0) {
             patch=v;
         }
         
-        if(v.indexOf(".")>-1) {
+        if(v.contains(".")) {
             build=v.substring(0, v.indexOf("."));
             v=v.substring(v.indexOf("."), v.length()-1);
         } else if (v.length()>0) {

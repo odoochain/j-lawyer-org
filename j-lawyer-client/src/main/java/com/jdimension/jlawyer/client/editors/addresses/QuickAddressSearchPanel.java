@@ -665,6 +665,7 @@ package com.jdimension.jlawyer.client.editors.addresses;
 
 import com.jdimension.jlawyer.client.configuration.PopulateOptionsEditor;
 import com.jdimension.jlawyer.client.editors.EditorsRegistry;
+import com.jdimension.jlawyer.client.editors.ResetOnDisplayEditor;
 import com.jdimension.jlawyer.client.editors.ThemeableEditor;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.client.settings.UserSettings;
@@ -684,27 +685,23 @@ import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Image;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
-import java.util.TimerTask;
 import javax.swing.AbstractAction;
-import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JOptionPane;
 import javax.swing.KeyStroke;
-import javax.swing.MenuElement;
 import org.apache.log4j.Logger;
 
 /**
  *
  * @author jens
  */
-public class QuickAddressSearchPanel extends javax.swing.JPanel implements ThemeableEditor {
+public class QuickAddressSearchPanel extends javax.swing.JPanel implements ThemeableEditor, ResetOnDisplayEditor {
 
     private static final Logger log = Logger.getLogger(QuickAddressSearchPanel.class.getName());
 
@@ -717,14 +714,16 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
     public QuickAddressSearchPanel() {
         initComponents();
         
+        this.txtSearchString.putClientProperty("JTextField.showClearButton", true);
+        this.txtSearchString.putClientProperty("JTextField.placeholderText", "Suche: Adressen");
+        
         UserSettings userSet = UserSettings.getInstance();
-        //this.detailsEditorClass=detailsEditorClass;
         if (userSet.isCurrentUserInRole(UserSettings.ROLE_WRITEADDRESS)) {
             this.detailsEditorClass = EditAddressDetailsPanel.class.getName();
         } else {
             this.detailsEditorClass = ViewAddressDetailsPanel.class.getName();
         }
-        String[] colNames = new String[]{"Name", "Vorname", "Unternehmen", "Abteilung", "PLZ", "Ort", "Strasse", "Land", "Etiketten"};
+        String[] colNames = new String[]{"Name", "Vorname", "Unternehmen", "Abteilung", "PLZ", "Ort", "Strasse", "Nr.", "Land", "Etiketten"};
         QuickAddressSearchTableModel model = new QuickAddressSearchTableModel(colNames, 0);
         this.tblResults.setModel(model);
 
@@ -739,10 +738,6 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
         ComponentUtils.autoSizeColumns(tblResults);
         
         
-        
-//        List<String> tagsInUse = ClientSettings.getInstance().getAddressTagsInUse();
-//        String[] lastFilterTags = ClientSettings.getInstance().getConfigurationArray(ClientSettings.CONF_ADDRESS_LASTFILTERTAG, new String[]{""});
-//        TagUtils.updateTagSelector(this, popTagFilter, al, tagsInUse, lastFilterTags);
     }
 
     public void populateTags(List<String> tags) {
@@ -753,17 +748,19 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
 
     public void clearInputs() {
         this.txtSearchString.setText("");
-        String[] colNames = new String[]{"Name", "Vorname", "Unternehmen", "Abteilung", "PLZ", "Ort", "Strasse", "Land", "Etiketten"};
+        String[] colNames = new String[]{"Name", "Vorname", "Unternehmen", "Abteilung", "PLZ", "Ort", "Strasse", "Nr.", "Land", "Etiketten"};
         QuickAddressSearchTableModel model = new QuickAddressSearchTableModel(colNames, 0);
         this.tblResults.setModel(model);
     }
 
+    @Override
     public void setBackgroundImage(Image image) {
         this.backgroundImage = image;
         this.tblResults.setOpaque(false);
 
     }
 
+    @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
         if (this.backgroundImage != null) {
@@ -790,7 +787,6 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
         mnuDuplicateSelectedAddress = new javax.swing.JMenuItem();
         mnuDeleteSelectedAddresses = new javax.swing.JMenuItem();
         popTagFilter = new javax.swing.JPopupMenu();
-        jLabel1 = new javax.swing.JLabel();
         txtSearchString = new javax.swing.JTextField();
         jScrollPane1 = new javax.swing.JScrollPane();
         tblResults = new javax.swing.JTable();
@@ -805,7 +801,7 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
 
         mnuOpenSelectedAddress.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/vcard.png"))); // NOI18N
         mnuOpenSelectedAddress.setText("öffnen");
-        mnuOpenSelectedAddress.setToolTipText("gewählte Adressen löschen");
+        mnuOpenSelectedAddress.setToolTipText("gewählte Adresse öffnen");
         mnuOpenSelectedAddress.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 mnuOpenSelectedAddressActionPerformed(evt);
@@ -832,8 +828,6 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
             }
         });
         popupAddressActions.add(mnuDeleteSelectedAddresses);
-
-        jLabel1.setText("Suchanfrage:");
 
         txtSearchString.addKeyListener(new java.awt.event.KeyAdapter() {
             public void keyPressed(java.awt.event.KeyEvent evt) {
@@ -881,7 +875,7 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
 
         jLabel18.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/Icons2-20.png"))); // NOI18N
 
-        lblPanelTitle.setFont(new java.awt.Font("Dialog", 1, 24)); // NOI18N
+        lblPanelTitle.setFont(lblPanelTitle.getFont().deriveFont(lblPanelTitle.getFont().getStyle() | java.awt.Font.BOLD, lblPanelTitle.getFont().getSize()+12));
         lblPanelTitle.setForeground(new java.awt.Color(255, 255, 255));
         lblPanelTitle.setText("jLabel19");
 
@@ -930,8 +924,6 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
                     .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 651, Short.MAX_VALUE)
                     .add(jScrollPane2)
                     .add(layout.createSequentialGroup()
-                        .add(jLabel1)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(txtSearchString)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(cmdQuickSearch)
@@ -957,9 +949,7 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, cmdQuickSearch)
-                    .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                        .add(jLabel1)
-                        .add(txtSearchString, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                    .add(txtSearchString, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                     .add(cmdTagFilter))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 190, Short.MAX_VALUE)
@@ -979,7 +969,7 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
         ThreadUtils.setWaitCursor(this, false);
         int[] selectedIndices = this.tblResults.getSelectedRows();
         Arrays.sort(selectedIndices);
-        ArrayList<String> ids = new ArrayList<String>();
+        ArrayList<String> ids = new ArrayList<>();
         for (int i = 0; i < selectedIndices.length; i++) {
             QuickAddressSearchRowIdentifier id = (QuickAddressSearchRowIdentifier) this.tblResults.getValueAt(selectedIndices[i], 0);
             ids.add(id.getAddressDTO().getId());
@@ -988,11 +978,8 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
         EditorsRegistry.getInstance().updateStatus("Lösche " + ids.size() + " Adresse(n)...", false);
         ClientSettings settings = ClientSettings.getInstance();
         try {
-            //InitialContext context = new InitialContext(settings.getLookupProperties());
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
 
-            //Object object = locator.lookup("SystemManagementBean");
-            //AddressServiceRemoteHome home = (AddressServiceRemoteHome)locator.getRemoteHome("ejb/AddressServiceBean", AddressServiceRemoteHome.class);
             AddressServiceRemote addressService = locator.lookupAddressServiceRemote();
             for (int i = ids.size() - 1; i > -1; i--) {
                 addressService.removeAddress(ids.get(i));
@@ -1000,14 +987,12 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
                 model.removeRow(this.tblResults.convertRowIndexToModel(selectedIndices[i]));
             }
 
-            //addressService.remove();
             EditorsRegistry.getInstance().clearStatus(false);
 
         } catch (Exception ex) {
             log.error("Error deleting address", ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Löschen: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Löschen: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             EditorsRegistry.getInstance().clearStatus(false);
-            return;
         } finally {
             ThreadUtils.setDefaultCursor(this, false);
         }
@@ -1036,19 +1021,21 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
 
         } catch (Exception ex) {
             log.error("Error creating editor from class " + this.detailsEditorClass, ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Laden des Editors: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden des Editors: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void tblResultsMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_tblResultsMouseClicked
-        if (evt.getClickCount() == 2 && evt.getButton() == evt.BUTTON1) {
+        if (evt.getClickCount() == 2 && evt.getButton() == MouseEvent.BUTTON1) {
             this.useSelection();
-        } else if (evt.getClickCount() == 1 && evt.getButton() == evt.BUTTON3) {
-            if (this.tblResults.getSelectedRowCount() < 1) {
+        } else if (evt.getClickCount() == 1 && evt.getButton() == MouseEvent.BUTTON3) {
+            int selectionCount=this.tblResults.getSelectedRowCount();
+            if (selectionCount < 1) {
                 return;
             }
+            this.mnuOpenSelectedAddress.setEnabled(selectionCount==1);
             this.popupAddressActions.show(this.tblResults, evt.getX(), evt.getY());
-        } else if (evt.getClickCount() == 1 && evt.getButton() == evt.BUTTON1) {
+        } else if (evt.getClickCount() == 1 && evt.getButton() == MouseEvent.BUTTON1) {
             if (this.tblResults.getSelectedRowCount() == 1) {
                 try {
                     int row = this.tblResults.getSelectedRow();
@@ -1058,7 +1045,7 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
                     JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
                     ArchiveFileServiceRemote afRem = locator.lookupArchiveFileServiceRemote();
                     Collection col = afRem.getArchiveFileAddressesForAddress(id.getAddressDTO().getId());
-                    List<ArchiveFileBean> partyFiles = new ArrayList<ArchiveFileBean>();
+                    List<ArchiveFileBean> partyFiles = new ArrayList<>();
                     for (Object o : col) {
                         ArchiveFileAddressesBean afb = (ArchiveFileAddressesBean) o;
                             partyFiles.add(afb.getArchiveFileKey());
@@ -1068,9 +1055,8 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
                     this.lblSummary.setText(html);
                 } catch (Exception ex) {
                     log.error("Error getting archive files for address", ex);
-                    JOptionPane.showMessageDialog(this, "Fehler beim Laden der Akten zur Adresse: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Fehler beim Laden der Akten zur Adresse: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                     EditorsRegistry.getInstance().clearStatus();
-                    return;
                 }
             } else {
                 this.lblSummary.setText("");
@@ -1080,7 +1066,7 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
     }//GEN-LAST:event_tblResultsMouseClicked
 
     private void txtSearchStringKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtSearchStringKeyPressed
-        if (evt.getKeyCode() == evt.VK_ENTER) {
+        if (evt.getKeyCode() == KeyEvent.VK_ENTER) {
             this.cmdQuickSearchActionPerformed(null);
         }
     }//GEN-LAST:event_txtSearchStringKeyPressed
@@ -1095,7 +1081,7 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
     }//GEN-LAST:event_cmdQuickSearchActionPerformed
 
     private void tblResultsKeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_tblResultsKeyReleased
-        if (this.tblResults.getSelectedRowCount() == 1 && (evt.getKeyCode() == evt.VK_DOWN || evt.getKeyCode() == evt.VK_UP)) {
+        if (this.tblResults.getSelectedRowCount() == 1 && (evt.getKeyCode() == KeyEvent.VK_DOWN || evt.getKeyCode() == KeyEvent.VK_UP)) {
             try {
                 int row = this.tblResults.getSelectedRow();
                 QuickAddressSearchRowIdentifier id = (QuickAddressSearchRowIdentifier) this.tblResults.getValueAt(row, 0);
@@ -1104,7 +1090,7 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
                 JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
                 ArchiveFileServiceRemote afRem = locator.lookupArchiveFileServiceRemote();
                 Collection<ArchiveFileAddressesBean> col = afRem.getArchiveFileAddressesForAddress(id.getAddressDTO().getId());
-                List<ArchiveFileBean> partyFiles = new ArrayList<ArchiveFileBean>();
+                List<ArchiveFileBean> partyFiles = new ArrayList<>();
                 for (Object o : col) {
                     ArchiveFileAddressesBean afb = (ArchiveFileAddressesBean) o;
                         partyFiles.add(afb.getArchiveFileKey());
@@ -1114,9 +1100,8 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
                 this.lblSummary.setText(html);
             } catch (Exception ex) {
                 log.error("Error getting archive files for address", ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Laden der Akten zur Adresse: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Fehler beim Laden der Akten zur Adresse: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                 EditorsRegistry.getInstance().clearStatus();
-                return;
             }
         } else {
             this.lblSummary.setText("");
@@ -1128,7 +1113,7 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
             TableUtils.exportAndLaunch("adresssuche-export.csv", this.tblResults);
         } catch (Exception ex) {
             log.error("Error exporting table to CSV", ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Export: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Export: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_cmdExportActionPerformed
 
@@ -1145,19 +1130,25 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
     }//GEN-LAST:event_cmdTagFilterMousePressed
 
     private void mnuDuplicateSelectedAddressActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_mnuDuplicateSelectedAddressActionPerformed
-        ThreadUtils.setWaitCursor(this, false);
         int[] selectedIndices = this.tblResults.getSelectedRows();
         Arrays.sort(selectedIndices);
-        ArrayList<String> ids = new ArrayList<String>();
+        ArrayList<String> ids = new ArrayList<>();
         for (int i = 0; i < selectedIndices.length; i++) {
             QuickAddressSearchRowIdentifier id = (QuickAddressSearchRowIdentifier) this.tblResults.getValueAt(selectedIndices[i], 0);
             ids.add(id.getAddressDTO().getId());
         }
+        
+        if (ids.size() > 1) {
+            int response = JOptionPane.showConfirmDialog(this, "" + ids.size() + " Adressen duplizieren?", "Adressen duplizieren", JOptionPane.YES_NO_OPTION);
+            if (response != JOptionPane.YES_OPTION) {
+                return;
+            }
+        }
 
+        ThreadUtils.setWaitCursor(this, false);
         EditorsRegistry.getInstance().updateStatus("Dupliziere " + ids.size() + " Adresse(n)...", false);
         ClientSettings settings = ClientSettings.getInstance();
         try {
-            //InitialContext context = new InitialContext(settings.getLookupProperties());
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
 
             AddressServiceRemote addressService = locator.lookupAddressServiceRemote();
@@ -1183,14 +1174,12 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
                 }
             }
 
-            //addressService.remove();
             EditorsRegistry.getInstance().clearStatus(false);
             this.cmdQuickSearchActionPerformed(null);
         } catch (Exception ex) {
             log.error("Error duplicating contacts", ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Duplizieren: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Duplizieren: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             EditorsRegistry.getInstance().clearStatus(false);
-            return;
         } finally {
             ThreadUtils.setDefaultCursor(this, false);
         }
@@ -1201,7 +1190,6 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
     private javax.swing.JButton cmdExport;
     private javax.swing.JButton cmdQuickSearch;
     private javax.swing.JButton cmdTagFilter;
-    private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel18;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JScrollPane jScrollPane1;
@@ -1220,6 +1208,17 @@ public class QuickAddressSearchPanel extends javax.swing.JPanel implements Theme
     @Override
     public Image getBackgroundImage() {
         return this.backgroundImage;
+    }
+
+    @Override
+    public void reset() {
+        this.txtSearchString.requestFocus();
+        this.txtSearchString.selectAll();
+    }
+
+    @Override
+    public boolean needsReset() {
+        return true;
     }
 
 }

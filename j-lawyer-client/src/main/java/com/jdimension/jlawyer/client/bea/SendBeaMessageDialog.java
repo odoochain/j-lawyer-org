@@ -663,6 +663,7 @@
  */
 package com.jdimension.jlawyer.client.bea;
 
+import com.jdimension.jlawyer.client.calendar.CalendarUtils;
 import com.jdimension.jlawyer.client.components.MultiCalDialog;
 import com.jdimension.jlawyer.client.configuration.OptionGroupListCellRenderer;
 import com.jdimension.jlawyer.client.configuration.UserListCellRenderer;
@@ -683,7 +684,6 @@ import com.jdimension.jlawyer.client.settings.UserSettings;
 import com.jdimension.jlawyer.client.utils.ComponentUtils;
 import com.jdimension.jlawyer.client.utils.FileUtils;
 import com.jdimension.jlawyer.client.utils.FrameUtils;
-import com.jdimension.jlawyer.client.utils.PlaceHolderUtils;
 import com.jdimension.jlawyer.client.utils.SelectAttachmentDialog;
 import com.jdimension.jlawyer.client.utils.StringUtils;
 import com.jdimension.jlawyer.client.utils.TableUtils;
@@ -695,9 +695,12 @@ import com.jdimension.jlawyer.persistence.AppUserBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileAddressesBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileReviewsBean;
+import com.jdimension.jlawyer.persistence.CalendarSetup;
+import com.jdimension.jlawyer.persistence.CaseFolder;
 import com.jdimension.jlawyer.persistence.PartyTypeBean;
-import com.jdimension.jlawyer.services.ArchiveFileServiceRemote;
+import com.jdimension.jlawyer.services.CalendarServiceRemote;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
+import com.jdimension.jlawyer.services.PartiesTriplet;
 import java.awt.Color;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
@@ -708,6 +711,7 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.awt.dnd.DropTargetEvent;
 import java.awt.dnd.DropTargetListener;
 import java.awt.event.ActionEvent;
+import java.awt.event.MouseEvent;
 import java.io.File;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
@@ -715,12 +719,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.TooManyListenersException;
 import javax.swing.*;
 import javax.swing.event.TableModelEvent;
-import javax.swing.event.TableModelListener;
 import javax.swing.table.DefaultTableModel;
 import org.apache.log4j.Logger;
 import org.jlawyer.bea.model.Attachment;
@@ -737,32 +741,38 @@ import themes.colors.DefaultColorTheme;
 public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCommunicationDialog, PartiesSelectionListener {
 
     private static final Logger log = Logger.getLogger(SendBeaMessageDialog.class.getName());
+
+    private static final String PLACEHOLDER_CURSOR = "{{CURSOR}}";
+
     private AppUserBean cu = null;
-    private Hashtable<String, String> attachments = new Hashtable<String, String>();
+    private Hashtable<String, String> attachments = new Hashtable<>();
     private ArchiveFileBean contextArchiveFile = null;
     private String contextDictateSign = null;
     private TextEditorPanel tp;
 
     private BeaListItem authority = null;
 
-    private ArrayList<ArchiveFileAddressesBean> caseInvolvements = null;
-
-    private Collection<PartyTypeBean> allPartyTypes = new ArrayList<PartyTypeBean>();
-    private List<String> allPartyTypesPlaceholders = new ArrayList<String>();
+    private List<PartyTypeBean> allPartyTypes = new ArrayList<>();
+    private List<String> allPartyTypesPlaceholders = new ArrayList<>();
 
     private DropTarget dropTarget;
     private DropTargetHandler dropTargetHandler;
 
     /**
      * Creates new form SendEmailDialog
+     *
+     * @param parent
+     * @param modal
      */
     public SendBeaMessageDialog(java.awt.Frame parent, boolean modal) {
         super(parent, modal);
         initComponents();
 
+        this.quickDateSelectionPanel.setTarget(this.txtReviewDateField);
+
         ComponentUtils.decorateSplitPane(jSplitPane1);
 
-        this.pnlParties.initialize(new ArrayList<ArchiveFileAddressesBean>());
+        this.pnlParties.initialize(new ArrayList<>());
         this.pnlParties.setListener(this);
 
         this.cmbAzRecipient.removeAllItems();
@@ -772,7 +782,6 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         this.cmbFrom.removeAllItems();
         this.cmbFrom.setModel(new DefaultComboBoxModel());
 
-        //FrameUtils.fitDialogToScreen(this, 0.85f);
         try {
             BeaAccess bea = BeaAccess.getInstance();
             for (PostBox pb : bea.getPostBoxes()) {
@@ -780,18 +789,6 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
 
             }
 
-            // can only send with a real postbox as "from"
-//        String currentUserSafeId=bea.getLoggedInSafeId();
-//        DefaultComboBoxModel model=(DefaultComboBoxModel)this.cmbFrom.getModel();
-//        boolean fromContainsCurrentLogin=false;
-//        for(int i=0;i<model.getSize();i++) {
-//            Identity ident=(Identity)model.getElementAt(i);
-//            if(ident.getSafeId().equals(currentUserSafeId)) {
-//                fromContainsCurrentLogin=true;
-//            }
-//        }
-//        if(!fromContainsCurrentLogin)
-//            model.addElement(bea.getIdentity(currentUserSafeId));
         } catch (Throwable t) {
             // leave dropdown empty
             log.error(t);
@@ -805,7 +802,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         ClientSettings settings = ClientSettings.getInstance();
         this.cu = UserSettings.getInstance().getCurrentUser();
 
-        String saveToFile = settings.getConfiguration(settings.CONF_BEA_SAVETOARCHIVEFILE, "1");
+        String saveToFile = settings.getConfiguration(ClientSettings.CONF_BEA_SAVETOARCHIVEFILE, "1");
         if ("1".equalsIgnoreCase(saveToFile)) {
             this.chkSaveAsDocument.setSelected(true);
         } else {
@@ -819,7 +816,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         }
 
         this.lblFrom.setText(cu.getPrincipalId() + "<" + fromIdentity + ">");
-        this.tp.setText(EmailUtils.Html2Text(cu.getEmailSignature()));
+        this.tp.setText("");
         this.lstTo.setModel(new DefaultListModel());
 
         try {
@@ -828,6 +825,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
             Collection templates = locator.lookupIntegrationServiceRemote().getAllEmailTemplateNames();
             this.cmbTemplates.removeAllItems();
             this.cmbTemplates.addItem("");
+            String lastUsedTemplate = UserSettings.getInstance().getSetting(UserSettings.CONF_BEA_LASTUSEDTEMPLATE, null);
             for (Object t : templates) {
                 EmailTemplate etpl = locator.lookupIntegrationServiceRemote().getEmailTemplate(t.toString());
                 if (etpl != null) {
@@ -838,22 +836,27 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
 
             }
             if (this.cmbTemplates.getItemCount() > 0) {
-                this.cmbTemplates.setSelectedIndex(0);
+                if (lastUsedTemplate != null) {
+                    this.cmbTemplates.setSelectedItem(lastUsedTemplate);
+                } else {
+                    this.cmbTemplates.setSelectedIndex(0);
+                }
             }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Fehler beim Erstellen der Vorlage: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            log.error(ex);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden der Nachrichtenvorlage: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
 
             this.allPartyTypes = locator.lookupSystemManagementRemote().getPartyTypes();
-            this.allPartyTypesPlaceholders = new ArrayList<String>();
+            this.allPartyTypesPlaceholders = new ArrayList<>();
             for (PartyTypeBean ptb : allPartyTypes) {
                 allPartyTypesPlaceholders.add(ptb.getPlaceHolder());
             }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Fehler beim Ermitteln der Beteiligtentypen: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Ermitteln der Beteiligtentypen: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
         this.cmbReviewReason.setRenderer(new OptionGroupListCellRenderer());
@@ -863,28 +866,28 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         for (int i = 0; i < reviewReasons.length; i++) {
             AppOptionGroupBean aogb = (AppOptionGroupBean) reviewReasons[i];
             reviewReasonItems[i + 1] = aogb.getValue();
-            //reviewReasonItems[i+1]=reviewReasons[i];
         }
         StringUtils.sortIgnoreCase(reviewReasonItems);
         OptionsComboBoxModel reviewReasonModel = new OptionsComboBoxModel(reviewReasonItems);
         this.cmbReviewReason.setModel(reviewReasonModel);
+        ComponentUtils.addAutoComplete(this.cmbReviewReason);
 
-        AppUserBean[] allUsers = UserSettings.getInstance().getAllUsers();
-        Object[] allUserItems = new Object[allUsers.length + 1];
+        List<AppUserBean> allUsers = UserSettings.getInstance().getLoginEnabledUsers();
+        Object[] allUserItems = new Object[allUsers.size() + 1];
         allUserItems[0] = "";
-        for (int i = 0; i < allUsers.length; i++) {
-            AppUserBean aub = (AppUserBean) allUsers[i];
+        for (int i = 0; i < allUsers.size(); i++) {
+            AppUserBean aub = allUsers.get(i);
             allUserItems[i + 1] = aub.getPrincipalId();
         }
         OptionsComboBoxModel allUserModel = new OptionsComboBoxModel(allUserItems);
         this.cmbReviewAssignee.setModel(allUserModel);
         this.cmbReviewAssignee.setRenderer(new UserListCellRenderer());
+        ComponentUtils.addAutoComplete(this.cmbReviewAssignee);
 
         DefaultComboBoxModel dm = new DefaultComboBoxModel();
         dm.addElement("");
-        ArrayList<String> allTags = new ArrayList<String>();
+        ArrayList<String> allTags = new ArrayList<>();
         for (AppOptionGroupBean tag : settings.getDocumentTagDtos()) {
-            //dm.addElement(tag.getValue());
             allTags.add(tag.getValue());
         }
         Collections.sort(allTags);
@@ -901,9 +904,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         }
 
         String temp = settings.getConfiguration(ClientSettings.CONF_BEASEND_DOCUMENTTAGGINGENABLED, "false");
-        boolean doctaggingEnabled = false;
         if ("true".equalsIgnoreCase(temp)) {
-            doctaggingEnabled = true;
             this.chkDocumentTagging.setSelected(true);
         }
 
@@ -911,31 +912,26 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
 
         this.updateAttachmentSize();
 
-        this.tblAttachments.getModel().addTableModelListener(
-                new TableModelListener() {
-            public void tableChanged(TableModelEvent evt) {
-                if (evt.getColumn() >= 0 && evt.getColumn() <= 3) {
-                    //updateAlias(evt.getFirstRow());
-                    if (evt.getColumn() == 0) {
-                        // user clicked "Schriftsatz" --> disable as attachment
-                        boolean schriftsatz = (Boolean) tblAttachments.getValueAt(evt.getFirstRow(), 0);
-                        boolean attachment = (Boolean) tblAttachments.getValueAt(evt.getFirstRow(), 1);
-                        if (schriftsatz == attachment) {
-                            tblAttachments.setValueAt(!schriftsatz, evt.getFirstRow(), 1);
-                        }
-
-                    } else if (evt.getColumn() == 1) {
-                        // user clicked "Anlage" --> disable as Schriftsatz
-                        boolean schriftsatz = (Boolean) tblAttachments.getValueAt(evt.getFirstRow(), 0);
-                        boolean attachment = (Boolean) tblAttachments.getValueAt(evt.getFirstRow(), 1);
-                        if (schriftsatz == attachment) {
-                            tblAttachments.setValueAt(!attachment, evt.getFirstRow(), 0);
-                        }
+        this.tblAttachments.getModel().addTableModelListener((TableModelEvent evt) -> {
+            if (evt.getColumn() >= 0 && evt.getColumn() <= 3) {
+                if (evt.getColumn() == 0) {
+                    // user clicked "Schriftsatz" --> disable as attachment
+                    boolean schriftsatz = (Boolean) tblAttachments.getValueAt(evt.getFirstRow(), 0);
+                    boolean attachment = (Boolean) tblAttachments.getValueAt(evt.getFirstRow(), 1);
+                    if (schriftsatz == attachment) {
+                        tblAttachments.setValueAt(!schriftsatz, evt.getFirstRow(), 1);
                     }
 
-                    updateAlias();
+                } else if (evt.getColumn() == 1) {
+                    // user clicked "Anlage" --> disable as Schriftsatz
+                    boolean schriftsatz = (Boolean) tblAttachments.getValueAt(evt.getFirstRow(), 0);
+                    boolean attachment = (Boolean) tblAttachments.getValueAt(evt.getFirstRow(), 1);
+                    if (schriftsatz == attachment) {
+                        tblAttachments.setValueAt(!attachment, evt.getFirstRow(), 0);
+                    }
                 }
-                //System.out.println("" + evt.getColumn() + " " + evt.getFirstRow() + " " + evt.getLastRow());
+
+                updateAlias();
             }
         });
 
@@ -946,6 +942,12 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         }
         // required to be able to drop on an empty table
         this.tblAttachments.setFillsViewportHeight(true);
+
+        this.calendarSelectionButton1.refreshCalendarSetups();
+        this.calendarSelectionButton1.setEnabled(false);
+
+        ComponentUtils.restoreSplitPane(jSplitPane1, this.getClass(), "jSplitPane1");
+        ComponentUtils.persistSplitPane(jSplitPane1, this.getClass(), "jSplitPane1");
 
     }
 
@@ -973,14 +975,14 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
             boolean azsender = (Boolean) this.tblAttachments.getValueAt(i, 2);
             boolean azempf = (Boolean) this.tblAttachments.getValueAt(i, 3);
 
-            StringBuffer sb = new StringBuffer();
+            StringBuilder sb = new StringBuilder();
             if (schriftsatz) {
                 anlage = false;
                 currentSchriftsatzIndex++;
                 sb.append(df.format(currentSchriftsatzIndex)).append("_");
             } else {
                 currentAttachmentIndex++;
-                sb.append(df.format(schriftsatzCount + currentAttachmentIndex)).append("_");
+                sb.append(df.format((long) schriftsatzCount + (long) currentAttachmentIndex)).append("_");
             }
 
             if (schriftsatz) {
@@ -991,22 +993,22 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
             }
 
             if (azsender && !StringUtils.isEmpty(this.txtAzSender.getText())) {
-                sb.append("Unser AZ " + this.txtAzSender.getText()).append("_");
+                sb.append("Unser AZ ").append(this.txtAzSender.getText()).append("_");
             }
             if (azempf && !StringUtils.isEmpty(this.cmbAzRecipient.getSelectedItem().toString())) {
-                sb.append("Ihr AZ " + this.cmbAzRecipient.getSelectedItem().toString()).append("_");
+                sb.append("Ihr AZ ").append(this.cmbAzRecipient.getSelectedItem().toString()).append("_");
             }
 
             // assume user has already changed the alias
-            int lastUnderScore=this.tblAttachments.getValueAt(i, 4).toString().lastIndexOf("_");
-            if(lastUnderScore>0) {
-                String lastPart=this.tblAttachments.getValueAt(i, 4).toString().substring(lastUnderScore+1);
+            int lastUnderScore = this.tblAttachments.getValueAt(i, 4).toString().lastIndexOf("_");
+            if (lastUnderScore > 0) {
+                String lastPart = this.tblAttachments.getValueAt(i, 4).toString().substring(lastUnderScore + 1);
                 sb.append(lastPart);
             } else {
                 // user has removed all underscores - use filename
                 sb.append(this.tblAttachments.getValueAt(i, 5));
             }
-            
+
             this.tblAttachments.setValueAt(sb.toString(), i, 4);
 
         }
@@ -1014,7 +1016,6 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
     }
 
     public void setInvolvedInCase(ArrayList<ArchiveFileAddressesBean> involved) {
-        this.caseInvolvements = involved;
         for (ArchiveFileAddressesBean entry : involved) {
             if (!StringUtils.isEmpty(entry.getReference())) {
                 this.addToAzRecipient(entry.getReference());
@@ -1063,31 +1064,14 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         this.txtAzSender.setText(fileNumber);
     }
 
-//    public void addAllParties(List<AddressBean> list, PartyTypeBean ptb) {
-//        for (AddressBean o : list) {
-//            this.addParty(o, ptb);
-//        }
-//    }
-//
-//    public void addParty(AddressBean ab, PartyTypeBean ptb) {
-//        if (ab == null) {
-//            return;
-//        }
-//
-//        this.pnlParties.addParty(ab, ptb);
-//
-//        this.addRecipientCandidate(ab, ptb);
-//
-//    }
-    
     public void addParty(AddressBean addr, PartyTypeBean ptb) {
-        
+
         this.pnlParties.addParty(new PartiesPanelEntry(addr, ptb));
-        
+
         this.addRecipientCandidate(addr, ptb);
-        
+
     }
-    
+
     public void addParty(ArchiveFileAddressesBean aab) {
         if (aab == null) {
             return;
@@ -1113,6 +1097,10 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
             this.chkSaveAsDocument.setEnabled(true);
             this.chkSaveAsDocument.setText("als Dokument speichern");
         }
+
+        if (this.contextArchiveFile != null && this.contextArchiveFile.getAssistant() != null) {
+            this.cmbReviewAssignee.setSelectedItem(this.contextArchiveFile.getAssistant());
+        }
     }
 
     public void setTo(Identity i) {
@@ -1129,9 +1117,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
     }
 
     public void setBody(String b) {
-        AppUserBean cu = UserSettings.getInstance().getCurrentUser();
-
-        this.tp.setText(b + EmailUtils.Html2Text(cu.getEmailSignature()));
+        this.tp.setText(b);
         this.tp.setCaretPosition(0);
 
     }
@@ -1210,6 +1196,8 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         txtReviewDateField = new javax.swing.JTextField();
         cmbReviewAssignee = new javax.swing.JComboBox();
         radioReviewTypeNone = new javax.swing.JRadioButton();
+        quickDateSelectionPanel = new com.jdimension.jlawyer.client.components.QuickDateSelectionPanel();
+        calendarSelectionButton1 = new com.jdimension.jlawyer.client.calendar.CalendarSelectionButton();
         chkDocumentTagging = new javax.swing.JCheckBox();
         jPanel2 = new javax.swing.JPanel();
         rdXjustiz = new javax.swing.JRadioButton();
@@ -1290,7 +1278,6 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         });
         jScrollPane3.setViewportView(lstTo);
 
-        jSplitPane1.setBorder(null);
         jSplitPane1.setResizeWeight(0.75);
 
         cmbAzRecipient.setEditable(true);
@@ -1405,7 +1392,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         jToolBar1.add(cmdAttach);
         jToolBar1.add(jSeparator3);
 
-        cmdSaveDraft.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons32/kate.png"))); // NOI18N
+        cmdSaveDraft.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons32/baseline_edit_square_black_48dp.png"))); // NOI18N
         cmdSaveDraft.setToolTipText("in \"Entwürfe\" speichern und später signieren/senden");
         cmdSaveDraft.setFocusable(false);
         cmdSaveDraft.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -1472,7 +1459,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
                 .addComponent(contentPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(jPanel5Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
+                    .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 299, Short.MAX_VALUE)
                     .addGroup(jPanel5Layout.createSequentialGroup()
                         .addComponent(cmdAttachmentUp)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -1534,7 +1521,13 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
 
         txtReviewDateField.setEditable(false);
         txtReviewDateField.setHorizontalAlignment(javax.swing.JTextField.RIGHT);
+        txtReviewDateField.setToolTipText("Doppelklick um heutiges Datum zu übernehmen");
         txtReviewDateField.setEnabled(false);
+        txtReviewDateField.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                txtReviewDateFieldMouseClicked(evt);
+            }
+        });
 
         cmbReviewAssignee.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
         cmbReviewAssignee.setEnabled(false);
@@ -1562,6 +1555,8 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
                         .addComponent(radioReviewTypeFollowUp)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(radioReviewTypeRespite)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(calendarSelectionButton1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(0, 0, Short.MAX_VALUE))
                     .addGroup(jPanel4Layout.createSequentialGroup()
                         .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1571,19 +1566,24 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
                         .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(cmbReviewAssignee, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                             .addGroup(jPanel4Layout.createSequentialGroup()
-                                .addComponent(txtReviewDateField, javax.swing.GroupLayout.PREFERRED_SIZE, 135, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(cmdShowReviewSelector)
+                                .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addComponent(quickDateSelectionPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addGroup(jPanel4Layout.createSequentialGroup()
+                                        .addComponent(txtReviewDateField, javax.swing.GroupLayout.PREFERRED_SIZE, 135, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                        .addComponent(cmdShowReviewSelector)))
                                 .addGap(0, 0, Short.MAX_VALUE)))))
                 .addContainerGap())
         );
         jPanel4Layout.setVerticalGroup(
             jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel4Layout.createSequentialGroup()
-                .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(radioReviewTypeFollowUp)
-                    .addComponent(radioReviewTypeRespite)
-                    .addComponent(radioReviewTypeNone))
+                .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(radioReviewTypeFollowUp)
+                        .addComponent(radioReviewTypeRespite)
+                        .addComponent(radioReviewTypeNone))
+                    .addComponent(calendarSelectionButton1, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(cmbReviewReason, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(7, 7, 7)
@@ -1595,7 +1595,10 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
                     .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                         .addComponent(txtReviewDateField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addComponent(jLabel10))
-                    .addComponent(cmdShowReviewSelector)))
+                    .addComponent(cmdShowReviewSelector))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(quickDateSelectionPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
         chkDocumentTagging.setText("Etikett:");
@@ -1696,7 +1699,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(cmbTemplates, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(pnlParties, javax.swing.GroupLayout.DEFAULT_SIZE, 171, Short.MAX_VALUE)
+                .addComponent(pnlParties, javax.swing.GroupLayout.DEFAULT_SIZE, 122, Short.MAX_VALUE)
                 .addContainerGap())
         );
 
@@ -1793,66 +1796,9 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
-    private void cmdSendActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdSendActionPerformed
+    private ArrayList<BeaAttachmentMetadata> getAttachmentMetdata() {
 
-        if (this.attachments.size() == 0 && this.rdXjustizEeb.isSelected()) {
-            JOptionPane.showMessageDialog(this, "Ein eEB kann nur für Nachrichten angefordert werden die mindestens einen Anhang enthalten.", "beA-Nachricht mit eEB senden", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        if (this.lstTo.getModel().getSize() == 0) {
-            JOptionPane.showMessageDialog(this, "Es muss mindestens ein Empfänger angegeben werden", "beA-Nachricht senden", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        ClientSettings settings = ClientSettings.getInstance();
-        if (this.chkSaveAsDocument.isSelected()) {
-            settings.setConfiguration(settings.CONF_BEA_SAVETOARCHIVEFILE, "1");
-        } else {
-            settings.setConfiguration(settings.CONF_BEA_SAVETOARCHIVEFILE, "0");
-        }
-
-        if (this.authority == null) {
-            //JOptionPane.showMessageDialog(this, "Für den Versand mit eEB muss eine Justizbehörde ausgewählt sein!", "Versand mit eEB", JOptionPane.WARNING_MESSAGE);
-            //return;
-            this.rdXjustizActionPerformed(null);
-            
-            if(this.authority==null) {
-                // user hit cancel
-                return;
-            }
-        }
-
-        String createDocumentTag = null;
-        if (this.chkDocumentTagging.isSelected()) {
-            Object selectedTag = this.cmbDocumentTag.getSelectedItem();
-            if (selectedTag != null) {
-                if (!"".equals(selectedTag.toString())) {
-                    createDocumentTag = selectedTag.toString();
-                }
-            }
-        }
-
-        ProgressIndicator dlg = new ProgressIndicator(this, true);
-        dlg.setShowCancelButton(false);
-        //SendAction a=new SendAction(dlg, this, this.attachments, this.cu, this.chkReadReceipt.isSelected(), this.txtTo.getText(), this.txtCc.getText(), this.txtBcc.getText(), this.txtSubject.getText(), this.taBody.getText());
-        EditorImplementation ed = (EditorImplementation) this.contentPanel.getComponent(0);
-        String contentType = ed.getContentType();
-        String fromSafeId = ((Identity) this.cmbFrom.getSelectedItem()).getSafeId();
-        SendBeaMessageAction a = null;
-
-        if (this.chkSaveAsDocument.isSelected() || !(this.radioReviewTypeNone.isSelected())) {
-            if (this.contextArchiveFile == null) {
-                SearchAndAssignDialog saDlg = new SearchAndAssignDialog(this, true, ""+this.cmbAzRecipient.getEditor().getItem().toString()+this.txtAzSender.getText()+this.txtSubject.getText());
-                saDlg.setVisible(true);
-                this.contextArchiveFile = saDlg.getSelection();
-
-                saDlg.dispose();
-
-            }
-        }
-
-        ArrayList<BeaAttachmentMetadata> attachmentMetadata = new ArrayList<BeaAttachmentMetadata>();
+        ArrayList<BeaAttachmentMetadata> attachmentMetadata = new ArrayList<>();
         for (int i = 0; i < this.tblAttachments.getRowCount(); i++) {
             String name = this.tblAttachments.getValueAt(i, 5).toString();
             String alias = this.tblAttachments.getValueAt(i, 4).toString();
@@ -1871,21 +1817,91 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
                 }
             }
         }
+        return attachmentMetadata;
+    }
 
-        String messageType=Message.MESSAGETYPE_ALLGEMEINE_NACHRICHT;
-        if(this.cmbMessageType.getSelectedItem().equals("Testnachricht"))
-            messageType=Message.MESSAGETYPE_TESTNACHRICHT;
-        else if(this.cmbMessageType.getSelectedItem().equals("Mahnantrag"))
-            messageType=Message.MESSAGETYPE_MAHN_ANTRAG;
-        
+    private void cmdSendActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdSendActionPerformed
+
+        if (this.attachments.isEmpty() && this.rdXjustizEeb.isSelected()) {
+            JOptionPane.showMessageDialog(this, "Ein eEB kann nur für Nachrichten angefordert werden die mindestens einen Anhang enthalten.", "beA-Nachricht mit eEB senden", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (this.lstTo.getModel().getSize() == 0) {
+            JOptionPane.showMessageDialog(this, "Es muss mindestens ein Empfänger angegeben werden", "beA-Nachricht senden", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        ClientSettings settings = ClientSettings.getInstance();
         if (this.chkSaveAsDocument.isSelected()) {
-            //a = new SendBeaMessageAction(dlg, this, fromSafeId, attachmentMetadata, this.cu, this.rdXjustizEeb.isSelected(), this.authority, ((DefaultListModel) this.lstTo.getModel()).elements(), this.txtSubject.getText(), ed.getText(), this.contextArchiveFile, createDocumentTag, this.txtAzSender.getText(), this.cmbAzRecipient.getSelectedItem().toString());
-            a = new SendBeaMessageAction(dlg, this, messageType, fromSafeId, attachmentMetadata, this.cu, this.rdXjustizEeb.isSelected(), this.authority, ((DefaultListModel) this.lstTo.getModel()).elements(), this.txtSubject.getText(), ed.getText(), this.contextArchiveFile, createDocumentTag, this.txtAzSender.getText(), this.cmbAzRecipient.getEditor().getItem().toString());
+            settings.setConfiguration(ClientSettings.CONF_BEA_SAVETOARCHIVEFILE, "1");
         } else {
-            //a = new SendBeaMessageAction(dlg, this, fromSafeId, attachmentMetadata, this.cu, this.rdXjustizEeb.isSelected(), this.authority, ((DefaultListModel) this.lstTo.getModel()).elements(), this.txtSubject.getText(), ed.getText(), createDocumentTag, this.txtAzSender.getText(), this.cmbAzRecipient.getSelectedItem().toString());
-            a = new SendBeaMessageAction(dlg, this, messageType, fromSafeId, attachmentMetadata, this.cu, this.rdXjustizEeb.isSelected(), this.authority, ((DefaultListModel) this.lstTo.getModel()).elements(), this.txtSubject.getText(), ed.getText(), createDocumentTag, this.txtAzSender.getText(), this.cmbAzRecipient.getEditor().getItem().toString());
+            settings.setConfiguration(ClientSettings.CONF_BEA_SAVETOARCHIVEFILE, "0");
+        }
+
+        if (this.authority == null) {
+            this.rdXjustizActionPerformed(null);
+
+            if (this.authority == null) {
+                // user hit cancel
+                return;
+            }
+        }
+
+        String createDocumentTag = null;
+        if (this.chkDocumentTagging.isSelected()) {
+            Object selectedTag = this.cmbDocumentTag.getSelectedItem();
+            if (selectedTag != null) {
+                if (!"".equals(selectedTag.toString())) {
+                    createDocumentTag = selectedTag.toString();
+                }
+            }
+        }
+
+        ProgressIndicator dlg = new ProgressIndicator(this, true);
+        dlg.setShowCancelButton(false);
+        EditorImplementation ed = (EditorImplementation) this.contentPanel.getComponent(0);
+        String fromSafeId = ((Identity) this.cmbFrom.getSelectedItem()).getSafeId();
+        SendBeaMessageAction a = null;
+
+        CaseFolder folder = null;
+        if (this.chkSaveAsDocument.isSelected() || !(this.radioReviewTypeNone.isSelected())) {
+            if (this.contextArchiveFile == null) {
+                SearchAndAssignDialog saDlg = new SearchAndAssignDialog(this, true, "" + this.cmbAzRecipient.getEditor().getItem().toString() + this.txtAzSender.getText() + this.txtSubject.getText(), null);
+                saDlg.setVisible(true);
+                this.contextArchiveFile = saDlg.getCaseSelection();
+                folder = saDlg.getFolderSelection();
+
+                saDlg.dispose();
+
+            }
+        }
+
+        ArrayList<BeaAttachmentMetadata> attachmentMetadata = this.getAttachmentMetdata();
+
+        String messageType = Message.MESSAGETYPE_ALLGEMEINE_NACHRICHT;
+        if (this.cmbMessageType.getSelectedItem().equals("Testnachricht")) {
+            messageType = Message.MESSAGETYPE_TESTNACHRICHT;
+        } else if (this.cmbMessageType.getSelectedItem().equals("Mahnantrag")) {
+            messageType = Message.MESSAGETYPE_MAHN_ANTRAG;
+        }
+
+        Identity recipient = null;
+        if (this.lstTo.getModel().getSize() > 0) {
+            recipient = (Identity) ((DefaultListModel) this.lstTo.getModel()).elements().nextElement();
+        }
+
+        if (this.chkSaveAsDocument.isSelected()) {
+            a = new SendBeaMessageAction(dlg, this, messageType, fromSafeId, attachmentMetadata, this.cu, this.rdXjustizEeb.isSelected(), this.authority, recipient, this.txtSubject.getText(), ed.getText(), this.contextArchiveFile, createDocumentTag, this.txtAzSender.getText(), this.cmbAzRecipient.getEditor().getItem().toString(), folder);
+        } else {
+            a = new SendBeaMessageAction(dlg, this, messageType, fromSafeId, attachmentMetadata, this.cu, this.rdXjustizEeb.isSelected(), this.authority, recipient, this.txtSubject.getText(), ed.getText(), createDocumentTag, this.txtAzSender.getText(), this.cmbAzRecipient.getEditor().getItem().toString());
         }
         a.start();
+
+        UserSettings uset = UserSettings.getInstance();
+        if (this.cmbTemplates.getSelectedItem() != null) {
+            uset.setSetting(UserSettings.CONF_BEA_LASTUSEDTEMPLATE, this.cmbTemplates.getSelectedItem().toString());
+        }
 
         if (!(this.radioReviewTypeNone.isSelected()) && this.contextArchiveFile != null) {
             if (this.txtReviewDateField.getText().length() != 10) {
@@ -1902,32 +1918,35 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
             }
 
             ArchiveFileReviewsBean reviewDto = new ArchiveFileReviewsBean();
-            reviewDto.setReviewType(reviewDto.REVIEWTYPE_FOLLOWUP);
+            reviewDto.setEventType(ArchiveFileReviewsBean.EVENTTYPE_FOLLOWUP);
             if (this.radioReviewTypeRespite.isSelected()) {
-                reviewDto.setReviewType(reviewDto.REVIEWTYPE_RESPITE);
+                reviewDto.setEventType(ArchiveFileReviewsBean.EVENTTYPE_RESPITE);
             }
             reviewDto.setDoneBoolean(false);
-            reviewDto.setReviewDate(d);
+            reviewDto.setBeginDate(d);
             reviewDto.setAssignee(this.cmbReviewAssignee.getSelectedItem().toString());
-            reviewDto.setReviewReason(this.cmbReviewReason.getModel().getSelectedItem().toString());
+            reviewDto.setSummary(this.cmbReviewReason.getModel().getSelectedItem().toString());
+            reviewDto.setCalendarSetup(this.calendarSelectionButton1.getSelectedSetup());
 
-            EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist wird gespeichert...");
-            try {
-                JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-                ArchiveFileServiceRemote fileService = locator.lookupArchiveFileServiceRemote();
+            if (CalendarUtils.checkForConflicts(this, reviewDto)) {
+                EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist wird gespeichert...");
+                try {
+                    JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+                    CalendarServiceRemote calService = locator.lookupCalendarServiceRemote();
 
-                reviewDto = fileService.addReview(this.contextArchiveFile.getId(), reviewDto);
-                EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist gespeichert.", 5000);
+                    reviewDto = calService.addReview(this.contextArchiveFile.getId(), reviewDto);
+                    EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist gespeichert.", 5000);
 
-            } catch (Exception ex) {
-                log.error("Error adding review", ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Speichern der Wiedervorlage: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-                EditorsRegistry.getInstance().clearStatus();
-                return;
+                } catch (Exception ex) {
+                    log.error("Error adding review", ex);
+                    JOptionPane.showMessageDialog(this, "Fehler beim Speichern der Wiedervorlage: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+                    EditorsRegistry.getInstance().clearStatus();
+                    return;
+                }
+
+                EventBroker eb = EventBroker.getInstance();
+                eb.publishEvent(new ReviewAddedEvent(reviewDto));
             }
-
-            EventBroker eb = EventBroker.getInstance();
-            eb.publishEvent(new ReviewAddedEvent(reviewDto));
 
         }
 
@@ -1942,7 +1961,6 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         this.jLabel10.setEnabled(enable);
         this.jLabel12.setEnabled(enable);
         if (!enable) {
-            this.cmbReviewAssignee.setSelectedIndex(0);
             this.cmbReviewReason.setSelectedIndex(0);
             this.txtReviewDateField.setText(null);
         }
@@ -1959,7 +1977,6 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         sad.setVisible(true);
 
         try {
-            //this.txtImportFile.setText(chooser.getSelectedFile().getCanonicalPath());
             File[] files = sad.getSelectedFiles();
             if (files == null) {
                 return;
@@ -1972,7 +1989,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
 
         } catch (Exception ioe) {
             log.error("Error attaching document", ioe);
-            JOptionPane.showMessageDialog(this, "Fehler beim Laden der Datei: " + ioe.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden der Datei: " + ioe.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
     }//GEN-LAST:event_cmdAttachActionPerformed
@@ -2014,38 +2031,63 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
                 EmailTemplate tpl = locator.lookupIntegrationServiceRemote().getEmailTemplate(tplName);
 
                 List<PartiesPanelEntry> selectedParties = this.pnlParties.getSelectedParties(new ArrayList(allPartyTypes));
-                ArrayList<String> placeHolderNames = EmailTemplateAccess.getPlaceHoldersInTemplate(tpl.getSubject(), allPartyTypesPlaceholders);
-                Hashtable<String, String> ht = new Hashtable<String, String>();
+                ArrayList<String> placeHolderNames = EmailTemplateAccess.getPlaceHoldersInTemplate(tpl.getSubject(), allPartyTypesPlaceholders,new ArrayList<>());
+                HashMap<String, Object> ht = new HashMap<>();
                 for (String ph : placeHolderNames) {
                     ht.put(ph, "");
                 }
-                Hashtable<String, String> htValues = PlaceHolderUtils.getPlaceHolderValues(ht, this.contextArchiveFile, selectedParties, this.contextDictateSign, null, new Hashtable<String, String>());
+
+                AppUserBean caseLawyer = null;
+                AppUserBean caseAssistant = null;
+                AppUserBean author = UserSettings.getInstance().getCurrentUser();
+                if (this.contextArchiveFile != null) {
+                    try {
+                        caseLawyer = locator.lookupSystemManagementRemote().getUser(this.contextArchiveFile.getLawyer());
+                    } catch (Exception ex) {
+                        log.warn("Unable to load lawyer with id " + this.contextArchiveFile.getLawyer());
+                    }
+                    try {
+                        caseAssistant = locator.lookupSystemManagementRemote().getUser(this.contextArchiveFile.getAssistant());
+                    } catch (Exception ex) {
+                        log.warn("Unable to load assistant with id " + this.contextArchiveFile.getAssistant());
+                    }
+                }
+
+                List<PartiesTriplet> partiesTriplets=new ArrayList<>();
+                for(PartiesPanelEntry pe: selectedParties) {
+                    PartiesTriplet triplet=new PartiesTriplet(pe.getAddress(), pe.getReferenceType(), pe.getInvolvement());
+                    partiesTriplets.add(triplet);
+                }
+                HashMap<String, Object> htValues = locator.lookupSystemManagementRemote().getPlaceHolderValues(ht, this.contextArchiveFile, partiesTriplets, this.contextDictateSign, null, new HashMap<>(), caseLawyer, caseAssistant, author);
                 this.txtSubject.setText(EmailTemplateAccess.replacePlaceHolders(tpl.getSubject(), htValues));
 
-                placeHolderNames = EmailTemplateAccess.getPlaceHoldersInTemplate(tpl.getBody(), allPartyTypesPlaceholders);
-                ht = new Hashtable<String, String>();
+                placeHolderNames = EmailTemplateAccess.getPlaceHoldersInTemplate(tpl.getBody(), allPartyTypesPlaceholders,new ArrayList<>());
+                ht = new HashMap<>();
                 for (String ph : placeHolderNames) {
                     ht.put(ph, "");
                 }
-                htValues = PlaceHolderUtils.getPlaceHolderValues(ht, this.contextArchiveFile, selectedParties, this.contextDictateSign, null, new Hashtable<String, String>());
-                //this.taBody.setText(EmailTemplateAccess.replacePlaceHolders(tpl.getBody(), htValues) + System.getProperty("line.separator") + System.getProperty("line.separator") + this.cu.getEmailSignature());
+                
+                htValues = locator.lookupSystemManagementRemote().getPlaceHolderValues(ht, this.contextArchiveFile, partiesTriplets, this.contextDictateSign, null, new HashMap<>(), caseLawyer, caseAssistant, author);
 
-                this.tp.setText(EmailTemplateAccess.replacePlaceHolders(tpl.getBody(), htValues) + System.getProperty("line.separator") + System.getProperty("line.separator") + EmailUtils.Html2Text(this.cu.getEmailSignature()));
-                //this.rdNoSignature.setSelected(true);
-                //this.textActionPerformed(null);
+                String t = EmailTemplateAccess.replacePlaceHolders(tpl.getBody(), htValues) + System.getProperty("line.separator");
+                int cursorIndex = t.indexOf(PLACEHOLDER_CURSOR);
+                if (cursorIndex > -1) {
+                    t = t.replace(PLACEHOLDER_CURSOR, "");
+                }
+                this.tp.setText(t);
+                this.tp.setCaretPosition(Math.max(0, cursorIndex));
+                this.tp.requestFocus();
 
-//                this.tp.setText(EmailTemplateAccess.replacePlaceHolders(tpl.getBody(), htValues) + System.getProperty("line.separator") + System.getProperty("line.separator") + this.cu.getEmailSignature());
-//                this.hp.setText(EmailTemplateAccess.replacePlaceHolders(tpl.getBody(), htValues) + System.getProperty("line.separator") + System.getProperty("line.separator") + this.cu.getEmailSignature());
             } catch (Exception ex) {
                 log.error("Error applying template", ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Erstellen der Vorlage: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Fehler beim Laden der Nachrichtenvorlage: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             }
         }
     }//GEN-LAST:event_cmbTemplatesActionPerformed
 
     private void rdXjustizActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_rdXjustizActionPerformed
         if (this.rdXjustiz.isSelected() && this.authority == null) {
-            SelectLegalAuthorityDialog dlg = new SelectLegalAuthorityDialog(EditorsRegistry.getInstance().getMainWindow(), true);
+            SelectLegalAuthorityDialog dlg = new SelectLegalAuthorityDialog(this, true);
             FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
             dlg.setVisible(true);
             this.authority = dlg.getSelectedAuthority();
@@ -2053,15 +2095,12 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
     }//GEN-LAST:event_rdXjustizActionPerformed
 
     private void contentPanelComponentResized(java.awt.event.ComponentEvent evt) {//GEN-FIRST:event_contentPanelComponentResized
-        //Component c=contentPanel.getComponent(0);
         tp.setBounds(0, 0, this.contentPanel.getWidth(), this.contentPanel.getHeight());
-        //tp.setSize(this.contentPanel.getWidth(), this.contentPanel.getHeight());
         SwingUtilities.updateComponentTreeUI(tp);
 
     }//GEN-LAST:event_contentPanelComponentResized
 
     private void mnuSearchRecipientActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_mnuSearchRecipientActionPerformed
-        //AddRecipientSearchDialog dlg = new AddRecipientSearchDialog(EditorsRegistry.getInstance().getMainWindow(), true, this.txtTo);
         AddBeaRecipientSearchDialog dlg = new AddBeaRecipientSearchDialog(this, true, this.lstTo, this.txtSubject);
         dlg.setTitle("Empfänger hinzufügen");
         FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
@@ -2074,7 +2113,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
 
     private void rdXjustizEebActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_rdXjustizEebActionPerformed
         if (this.rdXjustizEeb.isSelected() && this.authority == null) {
-            SelectLegalAuthorityDialog dlg = new SelectLegalAuthorityDialog(EditorsRegistry.getInstance().getMainWindow(), true);
+            SelectLegalAuthorityDialog dlg = new SelectLegalAuthorityDialog(this, true);
             FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
             dlg.setVisible(true);
             this.authority = dlg.getSelectedAuthority();
@@ -2083,36 +2122,37 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
 
     private void mnuSearchRecipientInBeaActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_mnuSearchRecipientInBeaActionPerformed
         BeaIdentitySearchDialog dlg = new BeaIdentitySearchDialog(this, true, null, null, null, null, null, null);
-        //dlg.setSize(ip.getPreferredSize());
         FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
         dlg.setVisible(true);
         Identity i = dlg.getSelection();
         if (i != null) {
             DefaultListModel model = (DefaultListModel) this.lstTo.getModel();
-            if (!model.contains(i)) {
-                model.addElement(i);
-            }
+            model.removeAllElements();
+            model.addElement(i);
         }
     }//GEN-LAST:event_mnuSearchRecipientInBeaActionPerformed
 
     private void radioReviewTypeFollowUpActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_radioReviewTypeFollowUpActionPerformed
         this.enableReviewElements(true);
+        this.calendarSelectionButton1.restrictToType(CalendarSetup.EVENTTYPE_FOLLOWUP);
+        this.calendarSelectionButton1.setEnabled(true);
     }//GEN-LAST:event_radioReviewTypeFollowUpActionPerformed
 
     private void radioReviewTypeRespiteActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_radioReviewTypeRespiteActionPerformed
         this.enableReviewElements(true);
+        this.calendarSelectionButton1.restrictToType(CalendarSetup.EVENTTYPE_RESPITE);
+        this.calendarSelectionButton1.setEnabled(true);
     }//GEN-LAST:event_radioReviewTypeRespiteActionPerformed
 
     private void cmdShowReviewSelectorActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdShowReviewSelectorActionPerformed
 
         MultiCalDialog dlg = new MultiCalDialog(this.txtReviewDateField, this, true);
-        //dlg.setLocation(this.getX() + this.cmdShowReviewSelector.getX(), this.getY() + this.cmdShowReviewSelector.getY());
-        FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
         dlg.setVisible(true);
     }//GEN-LAST:event_cmdShowReviewSelectorActionPerformed
 
     private void radioReviewTypeNoneActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_radioReviewTypeNoneActionPerformed
         this.enableReviewElements(false);
+        this.calendarSelectionButton1.setEnabled(false);
     }//GEN-LAST:event_radioReviewTypeNoneActionPerformed
 
     private void chkDocumentTaggingActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_chkDocumentTaggingActionPerformed
@@ -2158,7 +2198,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         }
         double megaBytes = (double) totalSize / 1024d / 1024d * 1.7d;
         DecimalFormat df = new DecimalFormat("0.0");
-        this.lblAttachmentSize.setText("Anlagen: " + this.tblAttachments.getRowCount() + " von max. 50 | " + df.format(megaBytes) + " MB von max. 60,0 MB");
+        this.lblAttachmentSize.setText("Anlagen: " + this.tblAttachments.getRowCount() + " von max. 1000 | " + df.format(megaBytes) + " MB von max. 200 MB");
         if (megaBytes > 60 || this.tblAttachments.getRowCount() > 50) {
             this.lblAttachmentSize.setForeground(DefaultColorTheme.COLOR_LOGO_RED);
         } else {
@@ -2178,7 +2218,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
     }//GEN-LAST:event_mnuRemoveRecipientActionPerformed
 
     private void lstToMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lstToMousePressed
-        if (evt.getModifiers() == evt.BUTTON2_MASK || evt.getModifiers() == evt.BUTTON2_DOWN_MASK || evt.getModifiers() == evt.BUTTON3_MASK || evt.getModifiers() == evt.BUTTON3_DOWN_MASK) {
+        if (evt.getModifiers() == MouseEvent.BUTTON2_MASK || evt.getModifiers() == MouseEvent.BUTTON2_DOWN_MASK || evt.getModifiers() == MouseEvent.BUTTON3_MASK || evt.getModifiers() == MouseEvent.BUTTON3_DOWN_MASK) {
             if (this.lstTo.getSelectedValues().length > 0) {
                 this.popRecipientList.show(this.lstTo, evt.getX(), evt.getY());
             }
@@ -2186,7 +2226,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
     }//GEN-LAST:event_lstToMousePressed
 
     private void cmdSaveDraftActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdSaveDraftActionPerformed
-        if (this.attachments.size() == 0 && this.rdXjustizEeb.isSelected()) {
+        if (this.attachments.isEmpty() && this.rdXjustizEeb.isSelected()) {
             JOptionPane.showMessageDialog(this, "Ein eEB kann nur für Nachrichten angefordert werden die mindestens einen Anhang enthalten.", "beA-Nachricht mit eEB senden", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -2198,14 +2238,12 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
 
         ClientSettings settings = ClientSettings.getInstance();
         if (this.chkSaveAsDocument.isSelected()) {
-            settings.setConfiguration(settings.CONF_BEA_SAVETOARCHIVEFILE, "1");
+            settings.setConfiguration(ClientSettings.CONF_BEA_SAVETOARCHIVEFILE, "1");
         } else {
-            settings.setConfiguration(settings.CONF_BEA_SAVETOARCHIVEFILE, "0");
+            settings.setConfiguration(ClientSettings.CONF_BEA_SAVETOARCHIVEFILE, "0");
         }
 
         if (this.authority == null) {
-            //JOptionPane.showMessageDialog(this, "Für den Versand mit eEB muss eine Justizbehörde ausgewählt sein!", "Versand mit eEB", JOptionPane.WARNING_MESSAGE);
-            //return;
             this.rdXjustizActionPerformed(null);
         }
 
@@ -2220,27 +2258,33 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         }
 
         ProgressIndicator dlg = new ProgressIndicator(this, true);
-        //SendAction a=new SendAction(dlg, this, this.attachments, this.cu, this.chkReadReceipt.isSelected(), this.txtTo.getText(), this.txtCc.getText(), this.txtBcc.getText(), this.txtSubject.getText(), this.taBody.getText());
         EditorImplementation ed = (EditorImplementation) this.contentPanel.getComponent(0);
-        String contentType = ed.getContentType();
         String fromSafeId = ((Identity) this.cmbFrom.getSelectedItem()).getSafeId();
         SaveBeaMessageAction a = null;
 
+        CaseFolder folder = null;
         if (this.chkSaveAsDocument.isSelected() || !(this.radioReviewTypeNone.isSelected())) {
             if (this.contextArchiveFile == null) {
-                SearchAndAssignDialog saDlg = new SearchAndAssignDialog(this, true, ""+this.cmbAzRecipient.getEditor().getItem().toString()+this.txtAzSender.getText()+this.txtSubject.getText());
+                SearchAndAssignDialog saDlg = new SearchAndAssignDialog(this, true, "" + this.cmbAzRecipient.getEditor().getItem().toString() + this.txtAzSender.getText() + this.txtSubject.getText(), null);
                 saDlg.setVisible(true);
-                this.contextArchiveFile = saDlg.getSelection();
-
+                this.contextArchiveFile = saDlg.getCaseSelection();
+                folder = saDlg.getFolderSelection();
                 saDlg.dispose();
 
             }
         }
 
+        Identity recipient = null;
+        if (this.lstTo.getModel().getSize() > 0) {
+            recipient = (Identity) ((DefaultListModel) this.lstTo.getModel()).elements().nextElement();
+        }
+
+        ArrayList<BeaAttachmentMetadata> attachmentMetadata = this.getAttachmentMetdata();
+
         if (this.chkSaveAsDocument.isSelected()) {
-            a = new SaveBeaMessageAction(dlg, this, fromSafeId, new ArrayList(this.attachments.values()), this.cu, this.rdXjustizEeb.isSelected(), this.authority, ((DefaultListModel) this.lstTo.getModel()).elements(), this.txtSubject.getText(), ed.getText(), this.contextArchiveFile, createDocumentTag, this.txtAzSender.getText(), this.cmbAzRecipient.getSelectedItem().toString());
+            a = new SaveBeaMessageAction(dlg, this, fromSafeId, attachmentMetadata, this.cu, this.rdXjustizEeb.isSelected(), this.authority, recipient, this.txtSubject.getText(), ed.getText(), this.contextArchiveFile, createDocumentTag, this.txtAzSender.getText(), this.cmbAzRecipient.getEditor().getItem().toString(), folder);
         } else {
-            a = new SaveBeaMessageAction(dlg, this, fromSafeId, new ArrayList(this.attachments.values()), this.cu, this.rdXjustizEeb.isSelected(), this.authority, ((DefaultListModel) this.lstTo.getModel()).elements(), this.txtSubject.getText(), ed.getText(), createDocumentTag, this.txtAzSender.getText(), this.cmbAzRecipient.getSelectedItem().toString());
+            a = new SaveBeaMessageAction(dlg, this, fromSafeId, attachmentMetadata, this.cu, this.rdXjustizEeb.isSelected(), this.authority, recipient, this.txtSubject.getText(), ed.getText(), createDocumentTag, this.txtAzSender.getText(), this.cmbAzRecipient.getEditor().getItem().toString());
         }
         a.start();
 
@@ -2259,32 +2303,35 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
             }
 
             ArchiveFileReviewsBean reviewDto = new ArchiveFileReviewsBean();
-            reviewDto.setReviewType(reviewDto.REVIEWTYPE_FOLLOWUP);
+            reviewDto.setEventType(ArchiveFileReviewsBean.EVENTTYPE_FOLLOWUP);
             if (this.radioReviewTypeRespite.isSelected()) {
-                reviewDto.setReviewType(reviewDto.REVIEWTYPE_RESPITE);
+                reviewDto.setEventType(ArchiveFileReviewsBean.EVENTTYPE_RESPITE);
             }
             reviewDto.setDoneBoolean(false);
-            reviewDto.setReviewDate(d);
+            reviewDto.setBeginDate(d);
             reviewDto.setAssignee(this.cmbReviewAssignee.getSelectedItem().toString());
-            reviewDto.setReviewReason(this.cmbReviewReason.getModel().getSelectedItem().toString());
+            reviewDto.setSummary(this.cmbReviewReason.getModel().getSelectedItem().toString());
+            reviewDto.setCalendarSetup(this.calendarSelectionButton1.getSelectedSetup());
 
-            EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist wird gespeichert...");
-            try {
-                JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-                ArchiveFileServiceRemote fileService = locator.lookupArchiveFileServiceRemote();
+            if (CalendarUtils.checkForConflicts(this, reviewDto)) {
+                EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist wird gespeichert...");
+                try {
+                    JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+                    CalendarServiceRemote calService = locator.lookupCalendarServiceRemote();
 
-                reviewDto = fileService.addReview(this.contextArchiveFile.getId(), reviewDto);
-                EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist gespeichert.", 5000);
+                    reviewDto = calService.addReview(this.contextArchiveFile.getId(), reviewDto);
+                    EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist gespeichert.", 5000);
 
-            } catch (Exception ex) {
-                log.error("Error adding review", ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Speichern der Wiedervorlage: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-                EditorsRegistry.getInstance().clearStatus();
-                return;
+                } catch (Exception ex) {
+                    log.error("Error adding review", ex);
+                    JOptionPane.showMessageDialog(this, "Fehler beim Speichern der Wiedervorlage: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+                    EditorsRegistry.getInstance().clearStatus();
+                    return;
+                }
+
+                EventBroker eb = EventBroker.getInstance();
+                eb.publishEvent(new ReviewAddedEvent(reviewDto));
             }
-
-            EventBroker eb = EventBroker.getInstance();
-            eb.publishEvent(new ReviewAddedEvent(reviewDto));
 
         }
     }//GEN-LAST:event_cmdSaveDraftActionPerformed
@@ -2306,13 +2353,12 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
                     return;
                 }
                 byte[] data = FileUtils.readFile(new File(requestedAttachmentUrl));
-                //String tmpFile = FileUtils.createTempFile(this.lstAttachments.getSelectedValue().toString(), data);
                 ReadOnlyDocumentStore store = new ReadOnlyDocumentStore("mailattachment-" + selectedFileName, selectedFileName);
-                Launcher launcher = LauncherFactory.getLauncher(selectedFileName, data, store);
+                Launcher launcher = LauncherFactory.getLauncher(selectedFileName, data, store, this);
                 launcher.launch(false);
             } catch (Exception ex) {
                 log.error("Error opening attachment", ex);
-                JOptionPane.showMessageDialog(this, "Fehler Öffnen des Anhangs: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Fehler Öffnen des Anhangs: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
 
             }
 
@@ -2320,7 +2366,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
     }//GEN-LAST:event_tblAttachmentsMouseClicked
 
     private void tblAttachmentsMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_tblAttachmentsMousePressed
-        if (evt.getModifiers() == evt.BUTTON2_MASK || evt.getModifiers() == evt.BUTTON2_DOWN_MASK || evt.getModifiers() == evt.BUTTON3_MASK || evt.getModifiers() == evt.BUTTON3_DOWN_MASK) {
+        if (evt.getModifiers() == MouseEvent.BUTTON2_MASK || evt.getModifiers() == MouseEvent.BUTTON2_DOWN_MASK || evt.getModifiers() == MouseEvent.BUTTON3_MASK || evt.getModifiers() == MouseEvent.BUTTON3_DOWN_MASK) {
             if (this.tblAttachments.getSelectedRowCount() > 0) {
                 this.popAttachments.show(this.tblAttachments, evt.getX(), evt.getY());
             }
@@ -2348,6 +2394,13 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
     private void txtAzSenderKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtAzSenderKeyTyped
         this.updateAlias();
     }//GEN-LAST:event_txtAzSenderKeyTyped
+
+    private void txtReviewDateFieldMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_txtReviewDateFieldMouseClicked
+        if (evt.getClickCount() == 2) {
+            SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy");
+            this.txtReviewDateField.setText(df.format(new Date()));
+        }
+    }//GEN-LAST:event_txtReviewDateFieldMouseClicked
 
     /**
      * @param args the command line arguments
@@ -2384,19 +2437,16 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         /*
          * Create and display the dialog
          */
-        java.awt.EventQueue.invokeLater(new Runnable() {
+        java.awt.EventQueue.invokeLater(() -> {
+            SendBeaMessageDialog dialog = new SendBeaMessageDialog(new javax.swing.JFrame(), true);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
 
-            public void run() {
-                SendBeaMessageDialog dialog = new SendBeaMessageDialog(new javax.swing.JFrame(), true);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
 
@@ -2433,14 +2483,12 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
         @Override
         public void dragEnter(DropTargetDragEvent dtde) {
             processDrag(dtde);
-            //SwingUtilities.invokeLater(new DragUpdate(true, dtde.getLocation()));
             repaint();
         }
 
         @Override
         public void dragOver(DropTargetDragEvent dtde) {
             processDrag(dtde);
-            //SwingUtilities.invokeLater(new DragUpdate(true, dtde.getLocation()));
             repaint();
         }
 
@@ -2450,14 +2498,12 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
 
         @Override
         public void dragExit(DropTargetEvent dte) {
-            //SwingUtilities.invokeLater(new DragUpdate(false, null));
             repaint();
         }
 
         @Override
         public void drop(DropTargetDropEvent dtde) {
 
-            //SwingUtilities.invokeLater(new DragUpdate(false, null));
             Transferable transferable = dtde.getTransferable();
             if (dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
                 dtde.acceptDrop(dtde.getDropAction());
@@ -2468,7 +2514,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
 
                         ThreadUtils.setWaitCursor(p);
 
-                        ArrayList<File> files = new ArrayList<File>();
+                        ArrayList<File> files = new ArrayList<>();
                         for (Object fo : transferData) {
                             if (fo instanceof File) {
                                 files.add((File) fo);
@@ -2476,18 +2522,18 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
                             }
                         }
 
-                        for(File f: files) {
-                            String tfname=FileUtils.createTempFile(f.getName(), FileUtils.readFile(f));
-                            File tf=new File(tfname);
+                        for (File f : files) {
+                            String tfname = FileUtils.createTempFile(f.getName(), FileUtils.readFile(f));
+                            File tf = new File(tfname);
                             addAttachment(tf.getPath(), null);
                         }
-                        
+
                         dtde.dropComplete(true);
                         ThreadUtils.setDefaultCursor(p);
                     }
 
                 } catch (Exception ex) {
-                    ex.printStackTrace();
+                    log.error(ex);
                 }
             } else {
                 dtde.rejectDrop();
@@ -2498,6 +2544,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.ButtonGroup btGroupReviews;
     private javax.swing.ButtonGroup buttonGroupTextHtml;
+    private com.jdimension.jlawyer.client.calendar.CalendarSelectionButton calendarSelectionButton1;
     private javax.swing.JCheckBox chkDocumentTagging;
     private javax.swing.JCheckBox chkSaveAsDocument;
     private javax.swing.JComboBox<String> cmbAzRecipient;
@@ -2547,6 +2594,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
     private javax.swing.JPopupMenu popAttachments;
     private javax.swing.JPopupMenu popRecipientList;
     private javax.swing.JPopupMenu popRecipients;
+    private com.jdimension.jlawyer.client.components.QuickDateSelectionPanel quickDateSelectionPanel;
     private javax.swing.JRadioButton radioReviewTypeFollowUp;
     private javax.swing.JRadioButton radioReviewTypeNone;
     private javax.swing.JRadioButton radioReviewTypeRespite;
@@ -2589,7 +2637,7 @@ public class SendBeaMessageDialog extends javax.swing.JDialog implements SendCom
                 }
             } catch (Throwable t) {
                 log.error(t);
-                JOptionPane.showMessageDialog(this.caller, "Fehler: " + t.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this.caller, "Fehler: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             }
         }
     }

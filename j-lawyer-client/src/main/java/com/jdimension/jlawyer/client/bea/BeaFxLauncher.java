@@ -685,6 +685,8 @@ public class BeaFxLauncher extends javax.swing.JDialog {
 
     /**
      * Creates new form BeaFxLauncher
+     * @param parent
+     * @param modal
      */
     public BeaFxLauncher(java.awt.Dialog parent, boolean modal) {
         super(parent, modal);
@@ -693,25 +695,17 @@ public class BeaFxLauncher extends javax.swing.JDialog {
         JFXPanel fxPanel = new JFXPanel();
         pnl.add(fxPanel);
         
-        Platform.runLater(new Runnable() {
-            @Override
-            public void run() {
-                initFX(fxPanel);
-            }
-       });
+        Platform.setImplicitExit(false);
+        Platform.runLater(() -> {
+            initFX(fxPanel);
+        });
         
         try {
-                //lblCardLogin.setText("Verbinde zum beA... Karten-PIN...");
                 BeaAccess bea = BeaAccess.getInstance();
                 bea.login();
                 this.loggedIn=true;
                 setVisible(false);
-                //beain.initWithCard();
-               
-
-                //lblCardLogin.setText("Verbinde zum beA... laden...");
-                //beain.refreshFolders(true);
-                //lblCardLogin.setText("Verbinde zum beA... fertig.");
+                
             } catch (Throwable t) {
                 log.error(t);
                 this.loggedIn=false;
@@ -814,17 +808,15 @@ public class BeaFxLauncher extends javax.swing.JDialog {
         //</editor-fold>
 
         /* Create and display the dialog */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                BeaFxLauncher dialog = new BeaFxLauncher(null, true);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            BeaFxLauncher dialog = new BeaFxLauncher(null, true);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
 

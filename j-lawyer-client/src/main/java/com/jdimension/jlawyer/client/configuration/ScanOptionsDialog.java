@@ -677,16 +677,18 @@ import org.apache.log4j.Logger;
  */
 public class ScanOptionsDialog extends javax.swing.JDialog {
 
-    private static Logger log=Logger.getLogger(ScanOptionsDialog.class.getName());
+    private static final Logger log=Logger.getLogger(ScanOptionsDialog.class.getName());
     
     /**
      * Creates new form ProfileDialog
+     * @param parent
+     * @param modal
      */
     public ScanOptionsDialog(java.awt.Frame parent, boolean modal) {
         super(parent, modal);
         initComponents();
         ServerSettings set=ServerSettings.getInstance();
-        this.txtServerDir.setText(set.getSetting(set.SERVERCONF_SCANNER_SERVERDIR, ""));
+        this.txtServerDir.setText(set.getSetting(ServerSettings.SERVERCONF_SCANNER_SERVERDIR, ""));
         
         
     }
@@ -768,13 +770,13 @@ public class ScanOptionsDialog extends javax.swing.JDialog {
                 SystemManagementRemote sys=locator.lookupSystemManagementRemote();
                 boolean valid=sys.validateFileOnServer(new File(this.txtServerDir.getText()), true);
                 if(!valid) {
-                    JOptionPane.showMessageDialog(this, "Verzeichnis existiert am Server nicht: " + this.txtServerDir.getText(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Verzeichnis existiert am Server nicht: " + this.txtServerDir.getText(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             
                     return;
                 }
         } catch (Exception ex) {
             log.error("error validating scanner options", ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Speichern: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Speichern: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             return;
         }
         
@@ -825,19 +827,16 @@ public class ScanOptionsDialog extends javax.swing.JDialog {
         /*
          * Create and display the dialog
          */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-
-            public void run() {
-                ScanOptionsDialog dialog = new ScanOptionsDialog(new javax.swing.JFrame(), true);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            ScanOptionsDialog dialog = new ScanOptionsDialog(new javax.swing.JFrame(), true);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
     // Variables declaration - do not modify//GEN-BEGIN:variables

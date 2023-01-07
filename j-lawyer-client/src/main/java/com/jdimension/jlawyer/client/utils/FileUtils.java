@@ -670,13 +670,14 @@ import com.jdimension.jlawyer.server.utils.ServerFileUtils;
 import java.awt.Component;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
-import java.util.Hashtable;
+import java.util.Date;
+import java.util.HashMap;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JDialog;
 import javax.swing.JOptionPane;
-import javax.swing.JRootPane;
 import javax.swing.WindowConstants;
 import javax.swing.filechooser.FileSystemView;
 import org.apache.log4j.Logger;
@@ -689,8 +690,8 @@ public class FileUtils extends ServerFileUtils {
 
     private static FileUtils instance = null;
     private static final Logger log = Logger.getLogger(FileUtils.class.getName());
-    private static final SimpleDateFormat datePrefix = new SimpleDateFormat("yyyy-MM-dd_HH-mm_");
-    private Hashtable<String, Icon> iconCache = null;
+    private HashMap<String, Icon> iconCache = null;
+    private HashMap<String, Icon> iconCache32 = null;
 
     public static synchronized FileUtils getInstance() {
         if (instance == null) {
@@ -702,8 +703,17 @@ public class FileUtils extends ServerFileUtils {
 
     private FileUtils() {
         super();
-        iconCache = new Hashtable<String, Icon>();
+        iconCache = new HashMap<>();
+        iconCache32 = new HashMap<>();
 
+    }
+
+    public static String getExtension(String fileName) {
+        int index = fileName.lastIndexOf('.');
+        if (index > -1 && index < fileName.length()) {
+            return fileName.substring(index + 1);
+        }
+        return "url-with-no-extension";
     }
 
     public Icon getFileTypeIcon(String fileName) {
@@ -724,54 +734,20 @@ public class FileUtils extends ServerFileUtils {
 
         try {
 
-            String osName = System.getProperty("os.name").toLowerCase();
-
-            if (osName.indexOf("linux") > -1 || osName.startsWith("mac")) {
-
-                if (fileExt.startsWith(".")) {
-                    fileExt = fileExt.substring(1, fileExt.length());
-                }
-                fileExt = fileExt.toLowerCase();
-                ImageIcon image = null;
-                try {
-                    image = new ImageIcon(getClass().getResource("/icons16/fileicons/file_type_" + fileExt + ".png"));
-                } catch (Throwable t) {
-                    log.warn("no file type icon for " + fileExt);
-                }
-                if (image != null) {
-                    this.iconCache.put(fileExt, image);
-                    return image;
-                } else {
-                    //Create a temporary file with the specified extension
-                    File file = File.createTempFile("icon", fileExt);
-
-                    FileSystemView view = FileSystemView.getFileSystemView();
-                    Icon icon = view.getSystemIcon(file);
-                    this.iconCache.put(fileExt, icon);
-
-                    //Delete the temporary file
-                    file.delete();
-                    return icon;
-                }
-//            } else if (osName.startsWith("mac")) {
-
-// this was not working - maybe macOS needs a "real" file, not just an empty one?
-//
-//                //Create a temporary file with the specified extension
-//                File file = File.createTempFile("icon", fileExt);
-//
-//                final javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
-//                Icon icon = fc.getUI().getFileView(fc).getIcon(file);
-//                
-//                if (icon != null) {
-//                    this.iconCache.put(fileExt, icon);
-//                }
-//
-//                //Delete the temporary file
-//                file.delete();
-//                return icon;
+            if (fileExt.startsWith(".")) {
+                fileExt = fileExt.substring(1, fileExt.length());
+            }
+            fileExt = fileExt.toLowerCase();
+            ImageIcon image = null;
+            try {
+                image = new ImageIcon(getClass().getResource("/icons16/fileicons/file_type_" + fileExt + ".png"));
+            } catch (Throwable t) {
+                log.warn("no file type icon for " + fileExt);
+            }
+            if (image != null) {
+                this.iconCache.put(fileExt, image);
+                return image;
             } else {
-                // Windows behaviour is default
                 //Create a temporary file with the specified extension
                 File file = File.createTempFile("icon", fileExt);
 
@@ -783,10 +759,72 @@ public class FileUtils extends ServerFileUtils {
                 file.delete();
                 return icon;
             }
-
         } catch (Throwable t) {
             log.error("Could not determine default file type icon for " + fileName, t);
             return null;
+        }
+    }
+
+    public Icon getFileTypeIcon32(String fileName) {
+
+        if (fileName == null) {
+            return null;
+        }
+
+        int lastDot = fileName.lastIndexOf('.');
+        String fileExt = ".odt";
+        if (lastDot > -1) {
+            fileExt = fileName.substring(lastDot);
+        }
+
+        if (this.iconCache32.containsKey(fileExt)) {
+            return this.iconCache32.get(fileExt);
+        }
+
+        try {
+
+            if (fileExt.startsWith(".")) {
+                fileExt = fileExt.substring(1, fileExt.length());
+            }
+            fileExt = fileExt.toLowerCase();
+            ImageIcon image = null;
+            try {
+                image = new ImageIcon(getClass().getResource("/icons32/fileicons/file_type_" + fileExt + "@2x.png"));
+            } catch (Throwable t) {
+                log.warn("no file type icon for " + fileExt);
+            }
+            if (image != null) {
+                this.iconCache32.put(fileExt, image);
+                return image;
+            } else {
+                //Create a temporary file with the specified extension
+                File file = File.createTempFile("icon", fileExt);
+
+                FileSystemView view = FileSystemView.getFileSystemView();
+                Icon icon = view.getSystemIcon(file);
+                this.iconCache32.put(fileExt, icon);
+
+                //Delete the temporary file
+                file.delete();
+                return icon;
+            }
+        } catch (Throwable t) {
+            log.error("Could not determine default file type icon for " + fileName, t);
+            return null;
+        }
+    }
+    
+    public static String getFileSizeHumanReadable(long size) {
+        DecimalFormat megaBytes = new DecimalFormat("0");
+        
+        if (size < 1024) {
+            size = 1024l;
+        }
+
+        if (size > (1024 * 1024)) {
+            return megaBytes.format(size / 1024l / 1024l) + " MB";
+        } else {
+            return megaBytes.format(size / 1024l) + " KB";
         }
     }
 
@@ -796,13 +834,13 @@ public class FileUtils extends ServerFileUtils {
 
     public static String getNewFileName(String currentFileName, boolean datetimePrefix, java.util.Date d) {
 
-        return getNewFileName(currentFileName, datetimePrefix, d, EditorsRegistry.getInstance().getMainWindow(), "Datei umbenennen");
+        return getNewFileName(currentFileName, datetimePrefix, d, EditorsRegistry.getInstance().getMainWindow(), "Datei benennen");
 
     }
 
     public static String getNewFileName(String currentFileName, boolean datetimePrefix, java.util.Date d, Component parent) {
 
-        return getNewFileName(currentFileName, datetimePrefix, d, parent, "Datei umbenennen");
+        return getNewFileName(currentFileName, datetimePrefix, d, parent, "Datei benennen");
 
     }
 
@@ -889,7 +927,7 @@ public class FileUtils extends ServerFileUtils {
 
             for (File f : fTmpDir.listFiles()) {
                 if (f.isDirectory()) {
-                    if (f.getName().indexOf("_") > -1) {
+                    if (f.getName().contains("_")) {
                         String datePart = f.getName().substring(0, f.getName().indexOf("_"));
                         try {
                             long lDeletionTime = Long.parseLong(datePart);
@@ -909,12 +947,6 @@ public class FileUtils extends ServerFileUtils {
             log.error("Errors cleaning up temporary documents", t);
         }
 
-        //        File f = new File(path);
-//        f.deleteOnExit();
-//
-//        String dir = path.substring(0, path.lastIndexOf(System.getProperty("file.separator")));
-//        File remDir = new File(dir);
-//        remDir.deleteOnExit();
     }
 
     public static String createTempFile(String fileName, byte[] content, boolean readOnly) throws Exception {
@@ -927,23 +959,21 @@ public class FileUtils extends ServerFileUtils {
             deleteOnExit = false;
         }
 
-        String osName = System.getProperty("os.name").toLowerCase();
-
         String tmpDir = System.getProperty("java.io.tmpdir");
         if (deleteAfterDays > -1) {
             tmpDir = System.getProperty("user.home") + System.getProperty("file.separator") + ".j-lawyer-client" + System.getProperty("file.separator") + "tmp-documents";
         }
-        
-        boolean wordOnMac=false;
 
-        if (osName.startsWith("mac")) {
+        boolean wordOnMac = false;
+
+        if (SystemUtils.isMacOs()) {
 
             ClientSettings set = ClientSettings.getInstance();
             String wordProcessor = set.getConfiguration(ClientSettings.CONF_APPS_WORDPROCESSOR_KEY, ClientSettings.CONF_APPS_WORDPROCESSOR_VALUE_LO);
             boolean wordProcessorMicrosoft = ClientSettings.CONF_APPS_WORDPROCESSOR_VALUE_MSO.equalsIgnoreCase(wordProcessor);
 
             if (wordProcessorMicrosoft) {
-                wordOnMac=true;
+                wordOnMac = true;
                 // otherwise mac os 10.15+ will give a warning and user needs to grant access manually
                 tmpDir = "/Users/" + System.getProperty("user.name") + "/Library/Group Containers/UBF8T346G9.Office";
                 if (!(new File(tmpDir).exists()) || !(new File(tmpDir).isDirectory())) {
@@ -956,9 +986,6 @@ public class FileUtils extends ServerFileUtils {
             tmpDir = tmpDir + System.getProperty("file.separator");
         }
 
-//        if (osName.startsWith("mac")) {
-//            tmpDir=tmpDir + ".j-lawyer-client" + System.getProperty("file.separator") + "macos-tmp" + System.getProperty("file.separator");
-//        }
         StringGenerator idGen = new StringGenerator();
         if (deleteAfterDays > -1) {
             tmpDir = tmpDir + "" + (System.currentTimeMillis() + (deleteAfterDays * 24l * 60l * 60l * 1000l)) + "_" + idGen.getID().toString() + System.getProperty("file.separator");
@@ -966,10 +993,13 @@ public class FileUtils extends ServerFileUtils {
             tmpDir = tmpDir + idGen.getID().toString() + System.getProperty("file.separator");
         }
         new File(tmpDir).mkdirs();
+        fileName = fileName.replace("\\", "_");
+        fileName = fileName.replace("/", "_");
+        fileName = fileName.replace("\t", "");
         String tmpFile = tmpDir + fileName;
-        FileOutputStream fos = new FileOutputStream(new File(tmpFile), false);
-        fos.write(content);
-        fos.close();
+        try ( FileOutputStream fos = new FileOutputStream(new File(tmpFile), false)) {
+            fos.write(content);
+        }
 
         if (readOnly) {
             try {
@@ -982,17 +1012,12 @@ public class FileUtils extends ServerFileUtils {
         if (deleteOnExit || wordOnMac) {
             cleanupTempFile(tmpFile);
         }
-        
+
         return tmpFile;
     }
 
     public static void cleanupTempFile(String url) {
         File f = new File(url);
-//        boolean deleted = f.delete();
-//        if (!deleted) {
-//            log.error("could not delete temporary file " + url);
-//            return;
-//        }
 
         f.deleteOnExit();
 
@@ -1002,11 +1027,16 @@ public class FileUtils extends ServerFileUtils {
 
     }
 
+    public static String getNewFileNamePrefix(Date d) {
+        SimpleDateFormat datePrefix = new SimpleDateFormat("yyyy-MM-dd_HH-mm_");
+        return datePrefix.format(d);
+    }
+    
     public static String getNewFileName(String currentFileName, boolean datetimePrefix, java.util.Date d, Component parent, String title) {
 
         String dtPrefix = "";
         if (datetimePrefix) {
-            dtPrefix = datePrefix.format(d);
+            dtPrefix = getNewFileNamePrefix(d);
         }
 
         if (parent == null) {

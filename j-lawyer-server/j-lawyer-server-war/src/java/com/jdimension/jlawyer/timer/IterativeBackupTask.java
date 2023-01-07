@@ -670,6 +670,7 @@ import com.jdimension.jlawyer.persistence.ServerSettingsBeanFacadeLocal;
 import com.jdimension.jlawyer.server.utils.ServerFileUtils;
 import com.jdimension.jlawyer.server.utils.ServerInformation;
 import com.jdimension.jlawyer.services.ArchiveFileServiceLocal;
+import com.jdimension.jlawyer.services.CalendarServiceLocal;
 import com.jdimension.jlawyer.services.SystemManagementLocal;
 import com.jdimension.jlawyer.storage.VirtualFile;
 import com.jdimension.jlawyer.sync.FolderSync;
@@ -679,15 +680,8 @@ import java.io.*;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 import javax.naming.InitialContext;
-import net.lingala.zip4j.core.ZipFile;
-import net.lingala.zip4j.exception.ZipException;
-import net.lingala.zip4j.model.ZipParameters;
-import net.lingala.zip4j.util.Zip4jConstants;
 import org.apache.log4j.Logger;
-import org.apache.tika.parser.txt.CharsetDetector;
 
 /**
  *
@@ -699,9 +693,9 @@ public class IterativeBackupTask extends java.util.TimerTask implements Cancella
     private static boolean isRunning=false;
 
     private static Logger log = Logger.getLogger(IterativeBackupTask.class.getName());
-    private static SimpleDateFormat dfMailDate = new SimpleDateFormat("dd.MM.yyyy");
-    private static SimpleDateFormat dfMailTime = new SimpleDateFormat("HH:mm:ss");
-    private static DecimalFormat mbFormat = new DecimalFormat("0.0");
+    private SimpleDateFormat dfMailDate = new SimpleDateFormat("dd.MM.yyyy");
+    private SimpleDateFormat dfMailTime = new SimpleDateFormat("HH:mm:ss");
+    private DecimalFormat mbFormat = new DecimalFormat("0.0");
     private boolean adHoc = false;
 
     public IterativeBackupTask() {
@@ -728,16 +722,18 @@ public class IterativeBackupTask extends java.util.TimerTask implements Cancella
         String dbPassword = "";
         String dbPort = "3306";
         String syncLocation = "";
+        boolean backupSuccess=true;
         boolean syncSuccess = true;
         boolean exportSuccess = true;
         boolean exportEnabled = true;
         String exportLocation = "";
         String encryptionPassword = "";
         boolean encrypt = false;
+        boolean notifySuccess=true;
+        boolean notifyFailure=true;
 
         try {
             InitialContext ic = new InitialContext();
-            //ServerSettingsBeanFacadeLocal settings = (ServerSettingsBeanFacadeLocal) ic.lookup("j-lawyer-server/ServerSettingsBeanFacade/local");
             ServerSettingsBeanFacadeLocal settings = (ServerSettingsBeanFacadeLocal) ic.lookup("java:global/j-lawyer-server/j-lawyer-server-ejb/ServerSettingsBeanFacade!com.jdimension.jlawyer.persistence.ServerSettingsBeanFacadeLocal");
             ServerSettingsBean mode = settings.find("jlawyer.server.backup.backupmode");
             if (!this.adHoc) {
@@ -808,6 +804,21 @@ public class IterativeBackupTask extends java.util.TimerTask implements Cancella
                     exportLocation = "";
                 }
             }
+            
+            ServerSettingsBean notifySuccessSetting = settings.find("jlawyer.server.monitor.notify.backupsuccess");
+            if (notifySuccessSetting != null) {
+                String temp = notifySuccessSetting.getSettingValue();
+                if (temp != null) {
+                    notifySuccess="on".equalsIgnoreCase(temp);
+                }
+            }
+            ServerSettingsBean notifyFailureSetting = settings.find("jlawyer.server.monitor.notify.backupfailure");
+            if (notifyFailureSetting != null) {
+                String temp = notifyFailureSetting.getSettingValue();
+                if (temp != null) {
+                    notifyFailure="on".equalsIgnoreCase(temp);
+                }
+            }
 
             if (!this.adHoc) {
                 boolean mon = this.dayEnabled(settings, "jlawyer.server.backup.monday");
@@ -875,17 +886,20 @@ public class IterativeBackupTask extends java.util.TimerTask implements Cancella
         
         log.info("initializing backup executor");
         IterativeBackupExecutor ibe = new IterativeBackupExecutor(dataDir, backupDir, dbUser, dbPassword, dbPort, encryptionPassword);
-        String subject = "";
-        StringBuffer body = new StringBuffer();
+        String subject = "Erfolgreich: ";
+        StringBuilder body = new StringBuilder();
         BackupResult backupResult=null;
         try {
             log.info("starting backup");
             backupResult=ibe.execute();
         } catch (Throwable t) {
+            backupSuccess=false;
+            backupResult=new BackupResult();
             log.error("backup executor failed", t);
             subject = "Fehlgeschlagen: ";
             body.append(t.getMessage()).append("\r\n\r\n");
         }
+        log.info("Backup finished");
 
         File exportDir = null;
         if (exportLocation.length() > 0) {
@@ -893,30 +907,8 @@ public class IterativeBackupTask extends java.util.TimerTask implements Cancella
             exportDir = new File(exportLocation);
             exportDir.mkdirs();
         }
-
+        
         try {
-
-            log.info("Backup finished");
-
-            if (syncLocation.length() > 0) {
-                log.info("Starting sync to " + syncLocation);
-                syncStart = new Date();
-
-                try {
-                    VirtualFile vf = VirtualFile.getFile(syncLocation);
-                    FolderSync sync = new FolderSync(new File(backupDir), vf, null);
-                    // we can be sure the file is written, so sync without lastmodified check
-                    sync.synchronize(0);
-                    vf.close();
-                } catch (Throwable t) {
-                    log.error("failed to sync: " + t.getMessage(), t);
-                    syncSuccess = false;
-                    subject = "Fehlgeschlagen: ";
-                }
-
-                syncEnd = new Date();
-                log.info("Sync finished");
-            }
 
             exportEnabled = exportLocation.length() > 0;
             exportStart = new Date();
@@ -924,8 +916,9 @@ public class IterativeBackupTask extends java.util.TimerTask implements Cancella
                 log.info("Starting export to " + exportLocation);
                 InitialContext ic = new InitialContext();
                 ArchiveFileServiceLocal caseSvc = (ArchiveFileServiceLocal) ic.lookup("java:global/j-lawyer-server/j-lawyer-server-ejb/ArchiveFileService!com.jdimension.jlawyer.services.ArchiveFileServiceLocal");
+                CalendarServiceLocal calendarSvc = (CalendarServiceLocal) ic.lookup("java:global/j-lawyer-server/j-lawyer-server-ejb/CalendarService!com.jdimension.jlawyer.services.CalendarServiceLocal");
                 ArrayList<String> caseIds = caseSvc.getAllArchiveFileIds();
-                HTMLExport export = new HTMLExport(exportDir, caseSvc);
+                HTMLExport export = new HTMLExport(exportDir, caseSvc, calendarSvc);
                 for (String id : caseIds) {
                     ArchiveFileBean afb = caseSvc.getArchiveFileUnrestricted(id);
 
@@ -957,16 +950,43 @@ public class IterativeBackupTask extends java.util.TimerTask implements Cancella
             }
 
         } catch (Throwable ex) {
-            log.error("Errors creating backup", ex);
+            exportSuccess=false;
+            log.error("Errors creating export", ex);
             subject = "Fehlgeschlagen: ";
             body.append(ex.getMessage()).append("\r\n\r\n");
         }
         exportEnd = new Date();
 
+        try {
+            if (syncLocation.length() > 0) {
+                log.info("Starting sync to " + BackupSyncTask.removePasswordFromUrl(syncLocation));
+                syncStart = new Date();
+
+                try {
+                    VirtualFile vf = VirtualFile.getFile(syncLocation);
+                    FolderSync sync = new FolderSync(new File(backupDir), vf, null);
+                    // we can be sure the file is written, so sync without lastmodified check
+                    sync.synchronize(0);
+                    vf.close();
+                } catch (Throwable t) {
+                    log.error("failed to sync: " + t.getMessage(), t);
+                    syncSuccess = false;
+                    subject = "Fehlgeschlagen: ";
+                }
+
+                syncEnd = new Date();
+                log.info("Sync finished");
+            }
+        } catch (Throwable ex) {
+            log.error("Errors syncing backup", ex);
+            subject = "Fehlgeschlagen: ";
+            body.append(ex.getMessage()).append("\r\n\r\n");
+        }
+        
+
         Date backupEnd = new Date();
         try {
             InitialContext ic = new InitialContext();
-            //SystemManagementLocal sysMan = (SystemManagementLocal) ic.lookup("j-lawyer-server/SystemManagement/local");
             SystemManagementLocal sysMan = (SystemManagementLocal) ic.lookup("java:global/j-lawyer-server/j-lawyer-server-ejb/SystemManagement!com.jdimension.jlawyer.services.SystemManagementLocal");
             subject = subject + "j-lawyer.org Datensicherung vom " + dfMailDate.format(new Date());
             body.append("Informationen zu Ihrer turnusmäßigen Datensicherung:\r\n\r\n");
@@ -1008,7 +1028,11 @@ public class IterativeBackupTask extends java.util.TimerTask implements Cancella
             body.append("\r\n");
             body.append("Hinweis: Speichern Sie die Sicherungsdatei regelmäßig auf einem anderen Medium, idealerweise in anderen Räumlichkeiten (für den Fall eines Diebstahls oder Brandes).");
 
-            sysMan.statusMail(subject, body.toString());
+            if(exportSuccess && syncSuccess && backupSuccess && notifySuccess) {
+                sysMan.statusMail(subject, body.toString());
+            } else if((!exportSuccess || !syncSuccess || !backupSuccess) && notifyFailure) {
+                sysMan.statusMail(subject, body.toString());
+            }
         } catch (Throwable t) {
             log.error("Could not send status mail", t);
         }
@@ -1030,12 +1054,9 @@ public class IterativeBackupTask extends java.util.TimerTask implements Cancella
         for (File file : files) {
             fileList.add(file);
             if (file.isDirectory()) {
-                //System.out.println("directory:" + file.getCanonicalPath());
                 if (!("searchindex".equals(file.getName())) && !("archivefiles-preview".equals(file.getName()))) {
                     getAllFiles(file, fileList);
                 }
-            } else {
-                //System.out.println("     file:" + file.getCanonicalPath());
             }
         }
 

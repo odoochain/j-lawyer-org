@@ -670,6 +670,7 @@ import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import javax.swing.ImageIcon;
+import org.apache.log4j.Logger;
 import themes.colors.DefaultColorTheme;
 
 /**
@@ -678,6 +679,7 @@ import themes.colors.DefaultColorTheme;
  */
 public class StartupSplashFrame extends javax.swing.JFrame {
 
+    private static Logger log=Logger.getLogger(StartupSplashFrame.class.getName());
     private Main owner;
 
     /**
@@ -708,7 +710,7 @@ public class StartupSplashFrame extends javax.swing.JFrame {
             this.lblFullClientVersion.setFont(font.deriveFont(Font.BOLD, 12));
             this.lblUser.setFont(font.deriveFont(Font.BOLD, 18));
         } catch (Throwable t) {
-            t.printStackTrace();
+            log.error(t);
         }
     }
 
@@ -741,27 +743,27 @@ public class StartupSplashFrame extends javax.swing.JFrame {
         setPreferredSize(new java.awt.Dimension(700, 400));
         getContentPane().setLayout(null);
 
-        lblUser.setFont(new java.awt.Font("Dialog", 1, 18)); // NOI18N
+        lblUser.setFont(lblUser.getFont().deriveFont(lblUser.getFont().getStyle() | java.awt.Font.BOLD, lblUser.getFont().getSize()+6));
         lblUser.setForeground(new java.awt.Color(102, 102, 102));
         lblUser.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
         lblUser.setText("User");
         getContentPane().add(lblUser);
         lblUser.setBounds(20, 20, 570, 30);
 
-        lblVersion.setFont(new java.awt.Font("Dialog", 1, 48)); // NOI18N
+        lblVersion.setFont(lblVersion.getFont().deriveFont(lblVersion.getFont().getStyle() | java.awt.Font.BOLD, lblVersion.getFont().getSize()+36));
         lblVersion.setForeground(new java.awt.Color(14, 113, 180));
         lblVersion.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
         lblVersion.setText("1.0");
         getContentPane().add(lblVersion);
-        lblVersion.setBounds(500, 270, 180, 80);
+        lblVersion.setBounds(490, 270, 180, 80);
 
         lblFullClientVersion.setForeground(new java.awt.Color(102, 102, 102));
         lblFullClientVersion.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
         lblFullClientVersion.setText("fullClientVersion");
         getContentPane().add(lblFullClientVersion);
-        lblFullClientVersion.setBounds(520, 60, 160, 20);
+        lblFullClientVersion.setBounds(510, 60, 160, 20);
 
-        lblProgress.setFont(new java.awt.Font("Dialog", 1, 18)); // NOI18N
+        lblProgress.setFont(lblProgress.getFont().deriveFont(lblProgress.getFont().getStyle() | java.awt.Font.BOLD, lblProgress.getFont().getSize()+6));
         lblProgress.setForeground(new java.awt.Color(255, 255, 255));
         lblProgress.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         lblProgress.setText("jLabel2");
@@ -780,12 +782,12 @@ public class StartupSplashFrame extends javax.swing.JFrame {
         getContentPane().add(lblCompany);
         lblCompany.setBounds(20, 60, 670, 19);
 
-        lblDate.setFont(new java.awt.Font("Dialog", 1, 18)); // NOI18N
+        lblDate.setFont(lblDate.getFont().deriveFont(lblDate.getFont().getStyle() | java.awt.Font.BOLD, lblDate.getFont().getSize()+6));
         lblDate.setForeground(new java.awt.Color(102, 102, 102));
         lblDate.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
         lblDate.setText("jLabel3");
         getContentPane().add(lblDate);
-        lblDate.setBounds(420, 20, 260, 30);
+        lblDate.setBounds(410, 20, 260, 30);
 
         lblLogo.setIcon(new javax.swing.ImageIcon(getClass().getResource("/images/j-lawyer-logo.png"))); // NOI18N
         getContentPane().add(lblLogo);

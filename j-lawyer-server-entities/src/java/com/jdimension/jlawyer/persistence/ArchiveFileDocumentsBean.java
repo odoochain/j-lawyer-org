@@ -709,6 +709,20 @@ public class ArchiveFileDocumentsBean implements Serializable {
     @JoinColumn(name = "folder", referencedColumnName = "id")
     @ManyToOne
     private CaseFolder folder;
+    
+    @Column(name = "deleted_by")
+    protected String deletedBy;
+    @Column(name = "deletion_date")
+    @Temporal(TemporalType.TIMESTAMP)
+    protected Date deletionDate;
+    @Column(name = "deleted", columnDefinition = "TINYINT DEFAULT 0")
+    protected boolean deleted;
+    @Column(name = "version", columnDefinition = "INTEGER DEFAULT 1")
+    protected long version=1;
+    @Column(name = "highlight1", columnDefinition = "INTEGER DEFAULT -2147483648")
+    protected int highlight1=Integer.MIN_VALUE;
+    @Column(name = "highlight2", columnDefinition = "INTEGER DEFAULT -2147483648")
+    protected int highlight2=Integer.MIN_VALUE;
 
     public ArchiveFileDocumentsBean() {
     }
@@ -844,6 +858,94 @@ public class ArchiveFileDocumentsBean implements Serializable {
      */
     public void setFolder(CaseFolder folder) {
         this.folder = folder;
+    }
+
+    /**
+     * @return the deletedBy
+     */
+    public String getDeletedBy() {
+        return deletedBy;
+    }
+
+    /**
+     * @param deletedBy the deletedBy to set
+     */
+    public void setDeletedBy(String deletedBy) {
+        this.deletedBy = deletedBy;
+    }
+
+    /**
+     * @return the deletionDate
+     */
+    public Date getDeletionDate() {
+        return deletionDate;
+    }
+
+    /**
+     * @param deletionDate the deletionDate to set
+     */
+    public void setDeletionDate(Date deletionDate) {
+        this.deletionDate = deletionDate;
+    }
+
+    /**
+     * @return the deleted
+     */
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    /**
+     * @param deleted the deleted to set
+     */
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
+    }
+
+    /**
+     * @return the version
+     */
+    public long getVersion() {
+        return version;
+    }
+
+    /**
+     * @param version the version to set
+     */
+    public void setVersion(long version) {
+        this.version = version;
+    }
+    
+    public void bumpVersion() {
+        this.setVersion(this.version+1);
+    }
+
+    /**
+     * @return the highlight1
+     */
+    public int getHighlight1() {
+        return highlight1;
+    }
+
+    /**
+     * @param highlight1 the highlight1 to set
+     */
+    public void setHighlight1(int highlight1) {
+        this.highlight1 = highlight1;
+    }
+
+    /**
+     * @return the highlight2
+     */
+    public int getHighlight2() {
+        return highlight2;
+    }
+
+    /**
+     * @param highlight2 the highlight2 to set
+     */
+    public void setHighlight2(int highlight2) {
+        this.highlight2 = highlight2;
     }
     
 }

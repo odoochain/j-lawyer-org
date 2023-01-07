@@ -838,7 +838,7 @@ public class WizardMainPanel extends javax.swing.JPanel {
             .addGap(0, 0, Short.MAX_VALUE)
         );
 
-        lblTitle.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        lblTitle.setFont(lblTitle.getFont().deriveFont(lblTitle.getFont().getSize()+2f));
         lblTitle.setText("jLabel1");
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
@@ -895,7 +895,7 @@ public class WizardMainPanel extends javax.swing.JPanel {
             this.toggleButtonState();
             
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_cmdNextActionPerformed
 
@@ -932,7 +932,7 @@ public class WizardMainPanel extends javax.swing.JPanel {
             this.toggleButtonState();
             
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_cmdPreviousActionPerformed
 
@@ -945,7 +945,7 @@ public class WizardMainPanel extends javax.swing.JPanel {
             this.parent.dispose();
             
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_cmdCancelActionPerformed
 
@@ -958,7 +958,7 @@ public class WizardMainPanel extends javax.swing.JPanel {
             this.parent.dispose();
             
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_cmdDoneActionPerformed
 

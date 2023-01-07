@@ -664,15 +664,16 @@
 package com.jdimension.jlawyer.client.editors.documents.viewer;
 
 import com.jdimension.jlawyer.client.launcher.LauncherFactory;
+import com.jdimension.jlawyer.client.mail.EmailUtils;
 import com.jdimension.jlawyer.client.mail.MessageContainer;
-import com.jdimension.jlawyer.client.utils.FileUtils;
+import com.jdimension.jlawyer.persistence.ArchiveFileBean;
+import com.jdimension.jlawyer.persistence.MailboxSetup;
 import java.awt.Dimension;
 import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import javax.mail.Flags.Flag;
 import javax.mail.internet.MimeMessage;
 import javax.swing.JComponent;
@@ -684,37 +685,60 @@ import org.apache.log4j.Logger;
  */
 public class DocumentViewerFactory {
 
-    private static Logger log = Logger.getLogger(DocumentViewerFactory.class.getName());
+    private static final Logger log = Logger.getLogger(DocumentViewerFactory.class.getName());
 
-    public static JComponent getDocumentViewer(String id, String fileName, boolean readOnly, String previewContent, byte[] content, int width, int height) {
-
+    public static JComponent getDocumentViewer(String id, String fileName, boolean readOnly, DocumentPreviewProvider previewProvider, byte[] content, int width, int height) {
+        return getDocumentViewer(null, id, fileName, readOnly, previewProvider, content, width, height);
+    }
+    
+    public static JComponent getDocumentViewer(ArchiveFileBean caseDto, String id, String fileName, boolean readOnly, DocumentPreviewProvider previewProvider, byte[] content, int width, int height) {
+        
         if (fileName.toLowerCase().endsWith(".pdf")) {
-           PdfImagePanel pdfP=new PdfImagePanel(fileName, content);
-           pdfP.setSize(new Dimension(width, height));
-           pdfP.showContent(content);
-           return pdfP;
-           
+            PdfImagePanel pdfP = new PdfImagePanel(fileName, content);
+            pdfP.setSize(new Dimension(width, height));
+            pdfP.setMaximumSize(new Dimension(width, height));
+            pdfP.setPreferredSize(new Dimension(width, height));
+            pdfP.showContent(content);
+            return pdfP;
+
         } else if (fileName.toLowerCase().endsWith(".jpg") || fileName.toLowerCase().endsWith(".jpeg") || fileName.toLowerCase().endsWith(".gif") || fileName.toLowerCase().endsWith(".png")) {
-            GifJpegPngImagePanel ip=new GifJpegPngImagePanel(content);
+            GifJpegPngImagePanel ip = new GifJpegPngImagePanel(content);
             ip.setSize(width, height);
+            ip.setMaximumSize(new Dimension(width, height));
+            ip.setPreferredSize(new Dimension(width, height));
             ip.showContent(content);
             return ip;
-            
+
         } else if (fileName.toLowerCase().endsWith(".bmp") || fileName.toLowerCase().endsWith(".tif") || fileName.toLowerCase().endsWith(".tiff")) {
-            BmpTiffImagePanel ip=new BmpTiffImagePanel(content);
+            BmpTiffImagePanel ip = new BmpTiffImagePanel(content);
             ip.setSize(width, height);
+            ip.setMaximumSize(new Dimension(width, height));
+            ip.setPreferredSize(new Dimension(width, height));
             ip.showContent(content);
             return ip;
-        } else if(fileName.toLowerCase().endsWith(".txt")) {
+        } else if (fileName.toLowerCase().endsWith(".txt")) {
             PlaintextPanel ptp = new PlaintextPanel();
-            ptp.showContent(previewContent.getBytes());
+            ptp.setSize(new Dimension(width, height));
+            ptp.setMaximumSize(new Dimension(width, height));
+            ptp.setPreferredSize(new Dimension(width, height));
+            try {
+                ptp.showContent(previewProvider.getPreview().getBytes());
+            } catch(Exception ex) {
+                ptp.showContent(("FEHLER: " + ex.getMessage()).getBytes());
+            }
             return ptp;
         } else if (fileName.toLowerCase().endsWith(".html") || fileName.toLowerCase().endsWith(".htm")) {
             HtmlPanel hp = new HtmlPanel(id, readOnly);
+            hp.setSize(new Dimension(width, height));
+            hp.setMaximumSize(new Dimension(width, height));
+            hp.setPreferredSize(new Dimension(width, height));
             hp.showContent(content);
             return hp;
-        } else if(fileName.toLowerCase().endsWith(".xml") && (fileName.toLowerCase().contains("xjustiz"))) {
+        } else if (fileName.toLowerCase().endsWith(".xml") && (fileName.toLowerCase().contains("xjustiz"))) {
             XjustizPanel xjp = new XjustizPanel(id, fileName);
+            xjp.setSize(new Dimension(width, height));
+            xjp.setMaximumSize(new Dimension(width, height));
+            xjp.setPreferredSize(new Dimension(width, height));
             xjp.showContent(content);
             return xjp;
         } else if (fileName.toLowerCase().endsWith(".eml")) {
@@ -724,10 +748,18 @@ public class DocumentViewerFactory {
                 // need to set this to avoid sending read receipts
                 message.setFlag(Flag.SEEN, true);
                 EmailPanel ep = new EmailPanel();
-                ep.setMessage(new MessageContainer(message, message.getSubject(), true));
+                ep.setSize(new Dimension(width, height));
+                ep.setMaximumSize(new Dimension(width, height));
+                ep.setPreferredSize(new Dimension(width, height));
+                MailboxSetup ms=EmailUtils.getMailboxSetup(message);
+                ep.setMessage(new MessageContainer(message, message.getSubject(), true), ms);
+                ep.setCaseContext(caseDto);
                 return ep;
             } catch (Throwable t) {
                 EmailPanel ep = new EmailPanel();
+                ep.setSize(new Dimension(width, height));
+                ep.setMaximumSize(new Dimension(width, height));
+                ep.setPreferredSize(new Dimension(width, height));
                 ep.showStatus("Vorschau kann nicht geladen werden.");
                 return ep;
             }
@@ -753,22 +785,73 @@ public class DocumentViewerFactory {
 //            } catch (Throwable t) {
 //                log.error("could not convert file to PDF: " + fileName, t);
 //            }
+        } else if (fileName.toLowerCase().endsWith(".odt") || fileName.toLowerCase().endsWith(".ods")) {
+            try {
+                byte[] thumbBytes = null;
+                ZipInputStream zis
+                        = new ZipInputStream(new ByteArrayInputStream(content));
+                //get the zipped file list entry
+                ZipEntry ze = zis.getNextEntry();
+
+                while (ze != null) {
+
+                    String thumbName = ze.getName();
+                    if (thumbName.toLowerCase().endsWith("thumbnail.png")) {
+                        byte[] buffer = new byte[1024];
+                        //create all non exists folders
+                        //else you will hit FileNotFoundException for compressed folder
+
+                        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+
+                        int len;
+                        while ((len = zis.read(buffer)) > 0) {
+                            bos.write(buffer, 0, len);
+                        }
+
+                        bos.close();
+                        thumbBytes = bos.toByteArray();
+                        break;
+                    }
+
+                    ze = zis.getNextEntry();
+                }
+
+                zis.closeEntry();
+                zis.close();
+
+                if (thumbBytes != null) {
+                    GifJpegPngImageWithTextPanel ip = new GifJpegPngImageWithTextPanel(thumbBytes, previewProvider.getPreview().getBytes());
+                    ip.setSize(width, height);
+                    ip.setMaximumSize(new Dimension(width, height));
+                    ip.setPreferredSize(new Dimension(width, height));
+                    ip.showContent(thumbBytes);
+                    return ip;
+                }
+            } catch (Throwable t) {
+                log.error("Error extracting thumbnail from " + fileName, t);
+            }
         } else if (fileName.toLowerCase().endsWith(".bea")) {
             try {
                 BeaPanel bp = new BeaPanel(id);
+                bp.setSize(new Dimension(width, height));
+                bp.setMaximumSize(new Dimension(width, height));
+                bp.setPreferredSize(new Dimension(width, height));
                 bp.showContent(content);
+                bp.setCaseContext(caseDto);
                 return bp;
             } catch (Throwable t) {
                 log.error(t);
                 BeaPanel bp = new BeaPanel(null);
+                bp.setSize(new Dimension(width, height));
+                bp.setMaximumSize(new Dimension(width, height));
+                bp.setPreferredSize(new Dimension(width, height));
                 bp.showStatus("Vorschau kann nicht geladen werden.");
                 return bp;
             }
         } else if (LauncherFactory.supportedByLibreOffice(fileName)) {
-            
+
             // double clicking the documents table will fire the mouse event twice - one with clickount=1, then with clickcount=2
             // this cases LO to launch twice, which seems to fail...
-            
 //            try {
 //                FileConverter conv=FileConverter.getInstance();
 //                String tempPath=FileUtils.createTempFile(fileName, content);
@@ -791,23 +874,25 @@ public class DocumentViewerFactory {
 //                log.error(t);
 //                // fall back to text preview 
 //            }
-            
         }
-            // plain text preview is default
-            PlaintextPanel ptp = new PlaintextPanel();
-            
-                //ptp.showStatus("Vorschau wird geladen...");
-                // we just reuse the showStatus method because it is doing the same thing
-                //ptp.showStatus(previewContent);
-            
-            ptp.showContent(previewContent.getBytes());
-            
-            return ptp;
-        
+        // plain text preview is default
+        PlaintextPanel ptp = new PlaintextPanel();
+        ptp.setSize(new Dimension(width, height));
+        ptp.setMaximumSize(new Dimension(width, height));
+        ptp.setPreferredSize(new Dimension(width, height));
+
+        //ptp.showStatus("Vorschau wird geladen...");
+        // we just reuse the showStatus method because it is doing the same thing
+        //ptp.showStatus(previewContent);
+        try {
+            ptp.showContent(previewProvider.getPreview().getBytes());
+        } catch(Exception ex) {
+            ptp.showContent(("FEHLER: " + ex.getMessage()).getBytes());
+        }
         
 
+        return ptp;
+
     }
-    
-    
 
 }

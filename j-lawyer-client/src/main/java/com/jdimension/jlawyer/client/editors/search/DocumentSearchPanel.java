@@ -664,12 +664,14 @@
 package com.jdimension.jlawyer.client.editors.search;
 
 import com.jdimension.jlawyer.client.editors.EditorsRegistry;
+import com.jdimension.jlawyer.client.editors.ResetOnDisplayEditor;
 import com.jdimension.jlawyer.client.editors.ThemeableEditor;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
 import java.awt.Graphics;
 import java.awt.GridLayout;
 import java.awt.Image;
+import java.awt.event.KeyEvent;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import javax.swing.JLabel;
@@ -683,54 +685,37 @@ import org.jlawyer.search.SearchHit;
  *
  * @author jens
  */
-public class DocumentSearchPanel extends javax.swing.JPanel implements ThemeableEditor {
+public class DocumentSearchPanel extends javax.swing.JPanel implements ThemeableEditor, ResetOnDisplayEditor {
 
     private static final Logger log = Logger.getLogger(DocumentSearchPanel.class.getName());
     private Image backgroundImage = null;
     DecimalFormat df = new DecimalFormat("0.000");
 
     /**
-     * Creates new form QuickArchiveFileSearchPanel
+     * Creates new form DocumentSearchPanel
      */
     public DocumentSearchPanel() {
         initComponents();
+        this.txtSearchString.putClientProperty("JTextField.showClearButton", true);
+        this.txtSearchString.putClientProperty("JTextField.placeholderText", "Suche: Dokumente");
         this.scrollResults.getVerticalScrollBar().setUnitIncrement(16);
-        String[] colNames = new String[]{"Suchergebnisse"};
-        DefaultTableModel model = new DefaultTableModel(colNames, 0);
         ((JLabel)this.cmbMaxDocs.getRenderer()).setHorizontalAlignment(SwingConstants.RIGHT);
         
-//        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-//
-//            public void run() {
-//                ClientSettings settings = ClientSettings.getInstance();
-//                JLawyerServiceLocator locator = null;
-//                try {
-//                    locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-//                    locator.lookupSearchServiceRemote().reOpenIndex();
-//                    
-//                } catch (Throwable ex) {
-//                    log.error("Error re-opening search index", ex);
-//                    return;
-//                }
-//            }
-//        }));
-
-        /*
-         * RowSorter<TableModel> sorter = new TableRowSorter<TableModel>(model);
-         * this.tblResults.setRowSorter(sorter);
-         */
     }
 
+    @Override
     public void setBackgroundImage(Image image) {
         this.backgroundImage = image;
         
 
     }
     
+    @Override
     public Image getBackgroundImage() {
         return this.backgroundImage;
     }
 
+    @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
         if (this.backgroundImage != null) {
@@ -746,7 +731,6 @@ public class DocumentSearchPanel extends javax.swing.JPanel implements Themeable
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
-        jLabel1 = new javax.swing.JLabel();
         txtSearchString = new javax.swing.JTextField();
         cmdQuickSearch = new javax.swing.JButton();
         lblPanelTitle = new javax.swing.JLabel();
@@ -755,8 +739,7 @@ public class DocumentSearchPanel extends javax.swing.JPanel implements Themeable
         pnlResults = new javax.swing.JPanel();
         cmbMaxDocs = new javax.swing.JComboBox();
         lblResultCount = new javax.swing.JLabel();
-
-        jLabel1.setText("Suchanfrage:");
+        jLabel3 = new javax.swing.JLabel();
 
         txtSearchString.addKeyListener(new java.awt.event.KeyAdapter() {
             public void keyPressed(java.awt.event.KeyEvent evt) {
@@ -772,7 +755,7 @@ public class DocumentSearchPanel extends javax.swing.JPanel implements Themeable
             }
         });
 
-        lblPanelTitle.setFont(new java.awt.Font("Dialog", 1, 24)); // NOI18N
+        lblPanelTitle.setFont(lblPanelTitle.getFont().deriveFont(lblPanelTitle.getFont().getStyle() | java.awt.Font.BOLD, lblPanelTitle.getFont().getSize()+12));
         lblPanelTitle.setForeground(new java.awt.Color(255, 255, 255));
         lblPanelTitle.setText("Dokumentensuche");
 
@@ -795,7 +778,11 @@ public class DocumentSearchPanel extends javax.swing.JPanel implements Themeable
         cmbMaxDocs.setSelectedIndex(1);
         cmbMaxDocs.setToolTipText("maximale Anzahl Dokumente im Ergebnis");
 
+        lblResultCount.setForeground(new java.awt.Color(255, 255, 255));
         lblResultCount.setText("0 Ergebnisse");
+
+        jLabel3.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/baseline_help_white_36dp.png"))); // NOI18N
+        jLabel3.setToolTipText("<html><b>Felder: text: dateiname: autor: akte: az:</b><br/>Bsp: text:Kauf\n<p>&nbsp;</p>\n<b>Suchoptionen: AND OR</b>\n<p>&nbsp;</p>\n<b>&quot;Wortgruppe mittels Anf&uuml;hrungszeichen&quot;</b>\n<p>&nbsp;</p>\n<p><b>Ausschluss per vorangestelltem Minuszeichen</b><br/>Bsp: -Klage</p>\n<p>&nbsp;</p>\n<b>Wildcards: ? f&uuml;r ein Zeichen, * f&uuml;r mehrere Zeichen.</b><br/>\nBsp: M?ier (f&uuml;r eine Suche nach Meier und Maier)<br/>\n</html>");
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -806,11 +793,7 @@ public class DocumentSearchPanel extends javax.swing.JPanel implements Themeable
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(scrollResults)
                     .add(layout.createSequentialGroup()
-                        .add(jLabel1)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(txtSearchString)
-                            .add(lblResultCount, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .add(txtSearchString)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(cmbMaxDocs, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
@@ -818,7 +801,12 @@ public class DocumentSearchPanel extends javax.swing.JPanel implements Themeable
                     .add(layout.createSequentialGroup()
                         .add(jLabel2)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(lblPanelTitle, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
+                        .add(lblPanelTitle)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .add(jLabel3))
+                    .add(layout.createSequentialGroup()
+                        .add(lblResultCount)
+                        .add(0, 0, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -827,11 +815,11 @@ public class DocumentSearchPanel extends javax.swing.JPanel implements Themeable
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(jLabel2)
-                    .add(lblPanelTitle, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 34, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                    .add(lblPanelTitle, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 34, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                    .add(jLabel3))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                        .add(jLabel1)
                         .add(txtSearchString, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                         .add(cmbMaxDocs, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                     .add(cmdQuickSearch))
@@ -844,30 +832,13 @@ public class DocumentSearchPanel extends javax.swing.JPanel implements Themeable
     }// </editor-fold>//GEN-END:initComponents
 
     private void txtSearchStringKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_txtSearchStringKeyPressed
-        if (evt.getKeyCode() == evt.VK_ENTER) {
+        if (evt.getKeyCode() == KeyEvent.VK_ENTER) {
             this.cmdQuickSearchActionPerformed(null);
         }
     }//GEN-LAST:event_txtSearchStringKeyPressed
 
     private void cmdQuickSearchActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdQuickSearchActionPerformed
         // perform search here
-//        ThreadUtils.setWaitCursor(this);
-//        EditorsRegistry.getInstance().updateStatus("Suche Akten...");
-//        String tag=null;
-//        Object selectedTag=this.cmbTags.getSelectedItem();
-//        if(selectedTag!=null)
-//            tag=selectedTag.toString();
-//        new Thread(new QuickArchiveFileSearchThread(this, this.txtSearchString.getText(), this.chkIncludeArchive.isSelected(), tag, this.tblResults)).start();
-
-        String[] colNames = new String[]{"Suchergebnisse"};
-        DefaultTableModel model = new DefaultTableModel(colNames, 0) {
-
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                //all cells false
-                return true;
-            }
-        };
         
         HitPanel hp = new HitPanel();
         hp.doLayout();
@@ -909,21 +880,30 @@ public class DocumentSearchPanel extends javax.swing.JPanel implements Themeable
             this.scrollResults.revalidate();
         } catch (Exception ex) {
             log.error("Error performing index search", ex);
-            JOptionPane.showMessageDialog(this, "Fehler bei der Suche: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler bei der Suche: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             EditorsRegistry.getInstance().clearStatus();
-            return;
         }
 
     }//GEN-LAST:event_cmdQuickSearchActionPerformed
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JComboBox cmbMaxDocs;
     private javax.swing.JButton cmdQuickSearch;
-    private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
+    private javax.swing.JLabel jLabel3;
     protected javax.swing.JLabel lblPanelTitle;
     private javax.swing.JLabel lblResultCount;
     private javax.swing.JPanel pnlResults;
     private javax.swing.JScrollPane scrollResults;
     private javax.swing.JTextField txtSearchString;
     // End of variables declaration//GEN-END:variables
+
+    @Override
+    public void reset() {
+        this.txtSearchString.requestFocus();
+    }
+
+    @Override
+    public boolean needsReset() {
+        return true;
+    }
 }

@@ -702,6 +702,11 @@ public class CreateCloudShare extends javax.swing.JDialog {
 
     /**
      * Creates new form SendShare
+     * @param parent
+     * @param modal
+     * @param caseDto
+     * @param parties
+     * @param shares
      */
     public CreateCloudShare(JDialog parent, boolean modal, ArchiveFileBean caseDto, ArrayList<ArchiveFileAddressesBean> parties, List<Share> shares) {
         super(parent, modal);
@@ -726,36 +731,28 @@ public class CreateCloudShare extends javax.swing.JDialog {
         this.cmbFolder.removeAllItems();
         this.updateFolder();
 
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    CloudInstance cloud = CloudInstance.getInstance(UserSettings.getInstance().getCurrentUser());
-                    if (cloud != null) {
-                        List<String> folders = cloud.listFullFolders("", 4);
-                        StringUtils.sortIgnoreCase(folders);
-                        for (String f : folders) {
-                            ThreadUtils.addComboBoxItem(cmbFolder, f);
-                        }
-                        SwingUtilities.invokeLater(new Runnable() {
-                            @Override
-                            public void run() {
-                                updateFolder();
-                            }
-                            
-                        });
-                        
+        new Thread(() -> {
+            try {
+                CloudInstance cloud = CloudInstance.getInstance(UserSettings.getInstance().getCurrentUser());
+                if (cloud != null) {
+                    List<String> folders = cloud.listFullFolders("", 4);
+                    StringUtils.sortIgnoreCase(folders);
+                    for (String f : folders) {
+                        ThreadUtils.addComboBoxItem(cmbFolder, f);
                     }
-                } catch (Throwable t) {
-                    log.error(t);
+                    SwingUtilities.invokeLater(() -> {
+                        updateFolder();
+                    });
+                    
                 }
+            } catch (Throwable t) {
+                log.error(t);
             }
-
         }).start();
     }
 
     private void updateFolder() {
-        StringBuffer folder = new StringBuffer();
+        StringBuilder folder = new StringBuilder();
         Object selectedParty = this.cmbParty.getSelectedItem();
         AddressBean address = null;
         if (selectedParty != null) {
@@ -783,13 +780,6 @@ public class CreateCloudShare extends javax.swing.JDialog {
 
         this.checkFolder();
 
-//        new Thread(new Runnable() {
-//            @Override
-//            public void run() {
-//                
-//            }
-//            
-//        }).start();
     }
 
     private void checkFolder() {
@@ -1141,7 +1131,7 @@ public class CreateCloudShare extends javax.swing.JDialog {
                     msg = msg + System.lineSeparator();
                     msg = msg + "Evtl. erfüllt das Passwort nicht die Mindestanforderungen der Nextcloud-Installation.";
                 }
-                JOptionPane.showMessageDialog(this, msg, "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, msg, com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             }
         }
 
@@ -1190,6 +1180,8 @@ public class CreateCloudShare extends javax.swing.JDialog {
             address = (AddressBean) selectedParty;
             if (address.getEncryptionPwd() != null) {
                 this.txtPassword.setText(address.getEncryptionPwd());
+            } else {
+                this.txtPassword.setText("");
             }
         }
     }//GEN-LAST:event_cmbPartyActionPerformed
@@ -1200,7 +1192,7 @@ public class CreateCloudShare extends javax.swing.JDialog {
                 .useLower(true)
                 .useUpper(true)
                 .build();
-        this.txtPassword.setText(passwordGenerator.generate(8));
+        this.txtPassword.setText(passwordGenerator.generate(10));
     }//GEN-LAST:event_jButton1ActionPerformed
 
     private void cmbFolderActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmbFolderActionPerformed
@@ -1246,17 +1238,15 @@ public class CreateCloudShare extends javax.swing.JDialog {
         //</editor-fold>
 
         /* Create and display the dialog */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                CreateCloudShare dialog = new CreateCloudShare(null, true, null, null, null);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            CreateCloudShare dialog = new CreateCloudShare(null, true, null, null, null);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
 

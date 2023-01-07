@@ -714,7 +714,6 @@ public class MassMailPanel extends javax.swing.JPanel implements ThemeableEditor
             this.refreshList();
         } catch (Throwable ex) {
             log.error(ex);
-            ex.printStackTrace();
             JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Serien können nicht geladen werden: " + ex.getMessage(), "Serien laden", JOptionPane.ERROR_MESSAGE);
         }
 
@@ -779,7 +778,7 @@ public class MassMailPanel extends javax.swing.JPanel implements ThemeableEditor
 
         jLabel18.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/message_big.png"))); // NOI18N
 
-        lblPanelTitle.setFont(new java.awt.Font("Dialog", 1, 24)); // NOI18N
+        lblPanelTitle.setFont(lblPanelTitle.getFont().deriveFont(lblPanelTitle.getFont().getStyle() | java.awt.Font.BOLD, lblPanelTitle.getFont().getSize()+12));
         lblPanelTitle.setForeground(new java.awt.Color(255, 255, 255));
         lblPanelTitle.setText("Serienschreiben");
 
@@ -817,6 +816,7 @@ public class MassMailPanel extends javax.swing.JPanel implements ThemeableEditor
             }
         });
 
+        jLabel1.setForeground(new java.awt.Color(255, 255, 255));
         jLabel1.setText("Serie:");
 
         cmdAddCampaign.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/edit_add.png"))); // NOI18N
@@ -834,6 +834,7 @@ public class MassMailPanel extends javax.swing.JPanel implements ThemeableEditor
             }
         });
 
+        lblFolder.setForeground(new java.awt.Color(255, 255, 255));
         lblFolder.setText(" ");
 
         cmdAddContacts.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/vcard.png"))); // NOI18N
@@ -973,7 +974,6 @@ public class MassMailPanel extends javax.swing.JPanel implements ThemeableEditor
                 }
             } catch (Throwable ex) {
                 log.error(ex);
-                ex.printStackTrace();
                 JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Adressen können nicht ermittelt werden: " + ex.getMessage(), "Serie laden", JOptionPane.ERROR_MESSAGE);
             }
 
@@ -1040,7 +1040,6 @@ public class MassMailPanel extends javax.swing.JPanel implements ThemeableEditor
                 ((DefaultTableModel) this.tblResults.getModel()).removeRow(this.tblResults.convertRowIndexToModel(selected[i]));
             } catch (Throwable ex) {
                 log.error(ex);
-                ex.printStackTrace();
             }
         }
     }//GEN-LAST:event_mnuRemoveFromCampaignActionPerformed

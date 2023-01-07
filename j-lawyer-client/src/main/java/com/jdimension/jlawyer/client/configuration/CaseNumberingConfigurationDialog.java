@@ -668,7 +668,6 @@ import com.jdimension.jlawyer.client.settings.ServerSettings;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
 import java.awt.event.ItemEvent;
 import javax.swing.DefaultListModel;
-import javax.swing.JOptionPane;
 import themes.colors.DefaultColorTheme;
 
 /**
@@ -681,6 +680,8 @@ public class CaseNumberingConfigurationDialog extends javax.swing.JDialog {
 
     /**
      * Creates new form CaseNumberingConfigurationDialog
+     * @param parent
+     * @param modal
      */
     public CaseNumberingConfigurationDialog(java.awt.Frame parent, boolean modal) {
         super(parent, modal);
@@ -1038,7 +1039,7 @@ public class CaseNumberingConfigurationDialog extends javax.swing.JDialog {
             }
         });
 
-        lblHint.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblHint.setFont(lblHint.getFont().deriveFont(lblHint.getFont().getStyle() | java.awt.Font.BOLD, lblHint.getFont().getSize()+2));
         lblHint.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
         lblHint.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/info.png"))); // NOI18N
         lblHint.setText("Hinweise");
@@ -1354,19 +1355,16 @@ public class CaseNumberingConfigurationDialog extends javax.swing.JDialog {
         /*
          * Create and display the dialog
          */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-
-            public void run() {
-                CaseNumberingConfigurationDialog dialog = new CaseNumberingConfigurationDialog(new javax.swing.JFrame(), true);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            CaseNumberingConfigurationDialog dialog = new CaseNumberingConfigurationDialog(new javax.swing.JFrame(), true);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
     // Variables declaration - do not modify//GEN-BEGIN:variables

@@ -668,14 +668,17 @@ import com.jdimension.jlawyer.persistence.ArchiveFileBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileDocumentsBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileGroupsBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileHistoryBean;
-import com.jdimension.jlawyer.persistence.ArchiveFileReviewsBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileTagsBean;
+import com.jdimension.jlawyer.persistence.CaseFolder;
+import com.jdimension.jlawyer.persistence.CaseSyncSettings;
 import com.jdimension.jlawyer.persistence.DocumentFolder;
 import com.jdimension.jlawyer.persistence.DocumentFolderTemplate;
-import com.jdimension.jlawyer.persistence.PartyTypeBean;
+import com.jdimension.jlawyer.persistence.DocumentTagsBean;
+import com.jdimension.jlawyer.pojo.DataBucket;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import javax.ejb.Local;
 
@@ -687,6 +690,7 @@ import javax.ejb.Local;
 public interface ArchiveFileServiceLocal {
 
     public ArchiveFileDocumentsBean addDocument(String archiveFileId, String fileName, byte[] data, String dictateSign) throws Exception;
+    public ArchiveFileDocumentsBean addDocumentFromTemplate(String archiveFileId, String fileName, String templateFolder, String templateName, HashMap<String,Object> placeHolderValues, String dictateSign) throws Exception;
     
     public ArchiveFileBean createArchiveFile(ArchiveFileBean dto) throws Exception;
     public void updateArchiveFile(ArchiveFileBean dto) throws Exception;
@@ -700,14 +704,9 @@ public interface ArchiveFileServiceLocal {
     public int getDocumentCount();
     public Collection<ArchiveFileDocumentsBean> getDocuments(String archiveFileKey);
     public byte[] getDocumentContent(String id) throws Exception;
-    
-    public Collection getReviews(String archiveFileKey) throws Exception;
+    public DataBucket getDocumentContentBucket(String id) throws Exception;
     
     public ArchiveFileHistoryBean[] getHistoryForArchiveFile(String archiveFileKey) throws Exception;
-    
-//    public Collection getClients(String archiveFileKey);
-//    public Collection getOpponents(String archiveFileKey);
-//    public Collection getOpponentAttorneys(String archiveFileKey);
     
     byte[] exportCaseToHtml(String caseId) throws Exception;
 
@@ -715,22 +714,13 @@ public interface ArchiveFileServiceLocal {
 
     ArchiveFileHistoryBean[] getHistoryForArchiveFileUnrestricted(String archiveFileKey) throws Exception;
 
-//    Collection getClientsUnrestricted(String archiveFileKey);
-//
-//    Collection getOpponentsUnrestricted(String archiveFileKey);
-//
-//    Collection getOpponentAttorneysUnrestricted(String archiveFileKey);
-
-    Collection getReviewsUnrestricted(String archiveFileKey) throws Exception;
-    
     public Collection<ArchiveFileTagsBean> getTags(String archiveFileId) throws Exception;
+    public Collection<ArchiveFileTagsBean> getTagsUnrestricted(String archiveFileId) throws Exception;
 
     Collection getDocumentsUnrestricted(String archiveFileKey);
 
     byte[] getDocumentContentUnrestricted(String id) throws Exception;
 
-    Collection<ArchiveFileReviewsBean> getAllOpenReviewsUnrestricted();
-    
     public List<ArchiveFileAddressesBean> getInvolvementDetailsForCase(String archiveFileKey);
     
     public List<ArchiveFileAddressesBean> getInvolvementDetailsForCaseUnrestricted(String archiveFileKey);
@@ -741,25 +731,29 @@ public interface ArchiveFileServiceLocal {
 
     ArchiveFileDocumentsBean getDocument(String id) throws Exception;
     
+    Collection<DocumentTagsBean> getDocumentTags(String documentId) throws Exception;
+    
     public boolean renameDocument(String id, String newName) throws Exception;
     
     public void removeDocument(String id) throws Exception;
     
+    public void removeDocumentInNewTx(String id) throws Exception;
+    
     public boolean setDocumentContent(String id, byte[] content) throws Exception;
 
     ArchiveFileAddressesBean addAddressToCase(ArchiveFileAddressesBean address) throws Exception;
-
-    List<PartyTypeBean> getAllPartyTypes();
 
     ArchiveFileAddressesBean updateParty(String caseId, ArchiveFileAddressesBean party) throws Exception;
 
     void removeParty(String id) throws Exception;
 
     List<ArchiveFileGroupsBean> getAllowedGroups(String caseId) throws Exception;
+    
+    List<ArchiveFileGroupsBean> getAllowedGroups(ArchiveFileBean archiveFile);
 
     List<DocumentFolderTemplate> getAllFolderTemplates();
 
-    void addFolderTemplate(DocumentFolderTemplate template);
+    void addFolderTemplate(DocumentFolderTemplate template) throws Exception;
 
     void removeFolderTemplate(String name);
 
@@ -768,9 +762,33 @@ public interface ArchiveFileServiceLocal {
     DocumentFolderTemplate getFolderTemplate(String name);
 
     DocumentFolder addFolderToTemplate(String templateName, DocumentFolder folder) throws Exception;
+    
+    ArchiveFileHistoryBean addHistory(String archiveFileId, ArchiveFileHistoryBean history) throws Exception;
 
     void removeFolderFromTemplate(String folderId) throws Exception;
 
     void cloneFolderTemplate(String sourceTemplateName, String targetTemplateName) throws Exception;
+    
+    void moveDocumentsToFolder(Collection<String> documentIds, String folderId) throws Exception;
+    
+    CaseFolder applyFolderTemplate(String caseId, String templateName) throws Exception;
+
+    CaseFolder applyFolderTemplateById(String id, String templateId) throws Exception;
+
+    DocumentFolderTemplate getFolderTemplateById(String id);
+
+    void purgeDocumentBin() throws Exception;
+    
+    void enableCaseSync(List<String> caseIds, String principalId, boolean enabled) throws Exception;
+
+    List<CaseSyncSettings> getCaseSyncs(String caseId);
+
+    List<CaseSyncSettings> getCaseSyncsForUser(String principalId) throws Exception;
+    
+    Collection<ArchiveFileAddressesBean> getArchiveFileAddressesForAddress(String adressId);
+    
+    void setTag(String archiveFileId, ArchiveFileTagsBean tag, boolean active) throws Exception;
+    
+    void setDocumentTag(String documentId, DocumentTagsBean tag, boolean active) throws Exception;
     
 }

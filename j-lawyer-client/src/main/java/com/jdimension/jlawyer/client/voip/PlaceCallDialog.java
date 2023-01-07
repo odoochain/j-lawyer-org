@@ -664,9 +664,7 @@
 package com.jdimension.jlawyer.client.voip;
 
 import com.jdimension.jlawyer.client.settings.ClientSettings;
-import com.jdimension.jlawyer.client.settings.ServerSettings;
 import com.jdimension.jlawyer.client.utils.ComponentUtils;
-import com.jdimension.jlawyer.client.utils.StringUtils;
 import com.jdimension.jlawyer.client.utils.ThreadUtils;
 import com.jdimension.jlawyer.fax.BalanceInformation;
 import com.jdimension.jlawyer.fax.SipUri;
@@ -676,6 +674,7 @@ import com.jdimension.jlawyer.sip.SipUtils;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import org.apache.log4j.Logger;
 
@@ -689,8 +688,12 @@ public class PlaceCallDialog extends javax.swing.JDialog {
     
     /**
      * Creates new form SendSmsDialog
+     * @param parent
+     * @param modal
+     * @param ab
+     * @param phone
      */
-    public PlaceCallDialog(java.awt.Frame parent, boolean modal, AddressBean ab, String phone) {
+    public PlaceCallDialog(JFrame parent, boolean modal, AddressBean ab, String phone) {
         super(parent, modal);
         initComponents();
        
@@ -699,17 +702,14 @@ public class PlaceCallDialog extends javax.swing.JDialog {
         if("".equals(phone))
             phone="0";
         
-        this.lblTo.setText(ab.toDisplayName() + " (" + phone + ")");
-        this.txtE164.setText(SipUtils.E164Number(phone));
-        
-        ServerSettings set=ServerSettings.getInstance();
-        String prefix=set.getSetting(set.SERVERCONF_VOIPSIPPREFIX, "sip:");
-        this.lblPrefix.setText(prefix);
-        String suffix=set.getSetting(set.SERVERCONF_VOIPSIPSUFFIX, "@sipgate.de");
-        this.lblSuffix.setText(suffix);
+        String displayName="unbekannt";
+        if(ab!=null)
+            displayName=ab.toDisplayName();
+        this.lblTo.setText(displayName + " (" + phone + ")");
+        this.txtE164.setText(SipUtils.E164NumberWithPlusSign(phone));
         
         ClientSettings settings = ClientSettings.getInstance();
-        String lastUsed=settings.getConfiguration(settings.CONF_VOIP_LASTSIPVOICE, "");
+        String lastUsed=settings.getConfiguration(ClientSettings.CONF_VOIP_LASTSIPVOICE, "");
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
               ArrayList<SipUri> list=locator.lookupVoipServiceRemote().getOwnUris();
@@ -726,34 +726,24 @@ public class PlaceCallDialog extends javax.swing.JDialog {
 
         } catch (Exception ex) {
             log.error(ex);
-            ThreadUtils.showErrorDialog(this, "Fehler beim Ermitteln der eigenen SIP-Rufnummern: " + ex.getMessage(), "Fehler");
+            ThreadUtils.showErrorDialog(this, "Fehler beim Ermitteln der eigenen SIP-Rufnummern: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
         }
         
         this.cmbOwnUrisActionPerformed(null);
         
         ComponentUtils.restoreDialogSize(this);
         
-        new Thread(new Runnable() {
-
-            public void run() {
-                ClientSettings settings = ClientSettings.getInstance();
-                try {
-                    JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-                    
-                    final BalanceInformation bi = locator.lookupVoipServiceRemote().getBalance();
-                    
-                    SwingUtilities.invokeLater(new Runnable() {
-                        public void run() {
-                            NumberFormat nf=NumberFormat.getCurrencyInstance();
-                            lblBalance.setText("Guthaben: " + nf.format(bi.getTotal()));
-                        }
-                    });
-                    
-
-                } catch (Exception ex) {
-                    log.error(ex);
-                    //ThreadUtils.showErrorDialog(this, "Fehler beim Ermitteln der eigenen SIP-Rufnummern: " + ex.getMessage(), "Fehler");
-                }
+        new Thread(() -> {
+            ClientSettings settings1 = ClientSettings.getInstance();
+            try {
+                JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings1.getLookupProperties());
+                final BalanceInformation bi = locator.lookupVoipServiceRemote().getBalance();
+                SwingUtilities.invokeLater(() -> {
+                    NumberFormat nf=NumberFormat.getCurrencyInstance();
+                    lblBalance.setText("Guthaben: " + nf.format(bi.getTotal()));
+                });
+            }catch (Exception ex) {
+                log.error(ex);
             }
         }).start();
         
@@ -781,9 +771,7 @@ public class PlaceCallDialog extends javax.swing.JDialog {
         lblBalance = new javax.swing.JLabel();
         jPanel2 = new javax.swing.JPanel();
         lblTo = new javax.swing.JLabel();
-        lblPrefix = new javax.swing.JLabel();
         txtE164 = new javax.swing.JTextField();
-        lblSuffix = new javax.swing.JLabel();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
         setTitle("neuen Anruf tätigen");
@@ -867,7 +855,7 @@ public class PlaceCallDialog extends javax.swing.JDialog {
                                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                                     .addComponent(jCheckBox1)
                                     .addComponent(jLabel6))))
-                        .addGap(0, 148, Short.MAX_VALUE)))
+                        .addGap(0, 243, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         jPanel1Layout.setVerticalGroup(
@@ -895,24 +883,15 @@ public class PlaceCallDialog extends javax.swing.JDialog {
 
         lblTo.setText("0123");
 
-        lblPrefix.setText("sip:");
-
-        lblSuffix.setText("@sipgate.de");
-
         javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
         jPanel2Layout.setHorizontalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel2Layout.createSequentialGroup()
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel2Layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(lblTo, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addGroup(jPanel2Layout.createSequentialGroup()
-                        .addComponent(lblPrefix)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(txtE164, javax.swing.GroupLayout.DEFAULT_SIZE, 204, Short.MAX_VALUE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(lblSuffix)))
+                    .addComponent(lblTo, javax.swing.GroupLayout.DEFAULT_SIZE, 266, Short.MAX_VALUE)
+                    .addComponent(txtE164))
                 .addContainerGap())
         );
         jPanel2Layout.setVerticalGroup(
@@ -920,11 +899,8 @@ public class PlaceCallDialog extends javax.swing.JDialog {
             .addGroup(jPanel2Layout.createSequentialGroup()
                 .addComponent(lblTo)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(lblPrefix)
-                    .addComponent(txtE164, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(lblSuffix))
-                .addGap(0, 0, Short.MAX_VALUE))
+                .addComponent(txtE164, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 96, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -934,10 +910,10 @@ public class PlaceCallDialog extends javax.swing.JDialog {
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(layout.createSequentialGroup()
-                        .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+                        .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(jPanel2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                         .addGap(0, 0, Short.MAX_VALUE)
                         .addComponent(cmdCall)
@@ -976,16 +952,16 @@ public class PlaceCallDialog extends javax.swing.JDialog {
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
             SipUri localUri=(SipUri)this.cmbOwnUris.getSelectedItem();
-            String remoteUri=this.lblPrefix.getText() + this.txtE164.getText() + this.lblSuffix.getText();
+            String remoteUri=this.txtE164.getText();
             
-            locator.lookupVoipServiceRemote().initiateCall(localUri.getUri(), remoteUri);
-            settings.setConfiguration(settings.CONF_VOIP_LASTSIPVOICE, localUri.getUri());
+            locator.lookupVoipServiceRemote().initiateCall(localUri.getUri(), remoteUri, localUri.getOutgoingNumber());
+            settings.setConfiguration(ClientSettings.CONF_VOIP_LASTSIPVOICE, localUri.getUri());
             
             this.setVisible(false);
             this.dispose();
         } catch (Exception ex) {
             log.error(ex);
-            ThreadUtils.showErrorDialog(this, "Fehler beim Gesprächsaufbau: " + ex.getMessage(), "Fehler");
+            ThreadUtils.showErrorDialog(this, "Fehler beim Gesprächsaufbau: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
         }
         
         
@@ -1051,19 +1027,16 @@ public class PlaceCallDialog extends javax.swing.JDialog {
         /*
          * Create and display the dialog
          */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-
-            public void run() {
-                PlaceCallDialog dialog = new PlaceCallDialog(new javax.swing.JFrame(), true, null, null);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            PlaceCallDialog dialog = new PlaceCallDialog(new javax.swing.JFrame(), true, null, null);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
     // Variables declaration - do not modify//GEN-BEGIN:variables
@@ -1077,8 +1050,6 @@ public class PlaceCallDialog extends javax.swing.JDialog {
     private javax.swing.JPanel jPanel2;
     private javax.swing.JLabel lblBalance;
     private javax.swing.JLabel lblFax;
-    private javax.swing.JLabel lblPrefix;
-    private javax.swing.JLabel lblSuffix;
     private javax.swing.JLabel lblText;
     private javax.swing.JLabel lblTo;
     private javax.swing.JLabel lblVoice;

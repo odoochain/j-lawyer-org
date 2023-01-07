@@ -871,6 +871,9 @@ public class ArchiveFileBean implements Serializable {
 
     @Override
     public boolean equals(Object object) {
+        if(object==null)
+            return false;
+        
         // TODO: Warning - this method won't work in the case the id fields are not set
         if (!(object instanceof ArchiveFileBean)) {
             return false;
@@ -898,13 +901,13 @@ public class ArchiveFileBean implements Serializable {
     
     public void addParty(ArchiveFileAddressesBean dto) {
         if(this.archiveFileAddressesBeanList==null)
-            this.archiveFileAddressesBeanList=new ArrayList<ArchiveFileAddressesBean>();
+            this.archiveFileAddressesBeanList=new ArrayList<>();
         this.archiveFileAddressesBeanList.add(dto);
     }
     
     public void addReview(ArchiveFileReviewsBean dto) {
         if(this.archiveFileReviewsBeanList==null)
-            this.archiveFileReviewsBeanList=new ArrayList<ArchiveFileReviewsBean>();
+            this.archiveFileReviewsBeanList=new ArrayList<>();
         this.archiveFileReviewsBeanList.add(dto);
     }
     
@@ -918,30 +921,6 @@ public class ArchiveFileBean implements Serializable {
         }
         }
     }
-//    
-//    public void removeAllOpponents() {
-//        if(this.archiveFileAddressesBeanList!=null) {
-//        for(int i=this.archiveFileAddressesBeanList.size()-1;i>-1;i--) {
-//            ArchiveFileAddressesBean b=this.archiveFileAddressesBeanList.get(i);
-//            if(b.getReferenceType()==b.REFERENCETYPE_OPPONENT) {
-//                this.archiveFileAddressesBeanList.remove(i);
-//            }
-//            
-//        }
-//        }
-//    }
-//    
-//    public void removeAllOpponentAttorneys() {
-//        if(this.archiveFileAddressesBeanList!=null) {
-//        for(int i=this.archiveFileAddressesBeanList.size()-1;i>-1;i--) {
-//            ArchiveFileAddressesBean b=this.archiveFileAddressesBeanList.get(i);
-//            if(b.getReferenceType()==b.REFERENCETYPE_OPPONENTATTORNEY) {
-//                this.archiveFileAddressesBeanList.remove(i);
-//            }
-//            
-//        }
-//        }
-//    }
 
     /**
      * @return the lawyer

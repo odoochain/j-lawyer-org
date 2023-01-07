@@ -670,7 +670,6 @@ import com.jdimension.jlawyer.persistence.DocumentFolder;
 import com.jdimension.jlawyer.persistence.DocumentFolderTemplate;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import javax.swing.JOptionPane;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -685,10 +684,12 @@ import org.apache.log4j.Logger;
  */
 public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
 
-    private static Logger log = Logger.getLogger(DocumentFolderTemplatesDialog.class.getName());
+    private static final Logger log = Logger.getLogger(DocumentFolderTemplatesDialog.class.getName());
 
     /**
      * Creates new form DocumentFolderTemplatesDialog
+     * @param parent
+     * @param modal
      */
     public DocumentFolderTemplatesDialog(java.awt.Frame parent, boolean modal) {
         super(parent, modal);
@@ -710,8 +711,7 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
 
         } catch (Exception ex) {
             log.error("Error connecting to server", ex);
-            //JOptionPane.showMessageDialog(this.owner, "Verbindungsfehler: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             return;
         }
     }
@@ -776,6 +776,7 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
         jScrollPane1.setViewportView(treeFolders);
 
         cmdAdd.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/edit_add.png"))); // NOI18N
+        cmdAdd.setToolTipText("neue Ordnerstruktur anlegen");
         cmdAdd.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 cmdAddActionPerformed(evt);
@@ -783,6 +784,7 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
         });
 
         cmdRemove.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/editdelete.png"))); // NOI18N
+        cmdRemove.setToolTipText("Struktur löschen");
         cmdRemove.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 cmdRemoveActionPerformed(evt);
@@ -798,6 +800,7 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
         });
 
         cmdEdit.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/kate.png"))); // NOI18N
+        cmdEdit.setToolTipText("Struktur umbenennen");
         cmdEdit.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 cmdEditActionPerformed(evt);
@@ -881,8 +884,7 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
 
         } catch (Exception ex) {
             log.error("Error connecting to server", ex);
-            //JOptionPane.showMessageDialog(this.owner, "Verbindungsfehler: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -892,7 +894,7 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
         if (this.cmbTemplates.getSelectedItem() == null) {
             return;
         }
-
+        
         ClientSettings settings = ClientSettings.getInstance();
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
@@ -902,13 +904,15 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
 
         } catch (Exception ex) {
             log.error("Error connecting to server", ex);
-            //JOptionPane.showMessageDialog(this.owner, "Verbindungsfehler: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             return;
         }
     }//GEN-LAST:event_cmdRemoveActionPerformed
 
     private void cmdEditActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdEditActionPerformed
+        if(this.cmbTemplates.getSelectedItem()==null)
+            return;
+        
         ClientSettings settings = ClientSettings.getInstance();
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
@@ -927,8 +931,7 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
 
         } catch (Exception ex) {
             log.error("Error connecting to server", ex);
-            //JOptionPane.showMessageDialog(this.owner, "Verbindungsfehler: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             return;
         }
     }//GEN-LAST:event_cmdEditActionPerformed
@@ -944,14 +947,12 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
             if (template == null) {
                 return;
             }
-            DefaultMutableTreeNode root = new DefaultMutableTreeNode(template.getName());
             DefaultTreeModel tm = new DefaultTreeModel(buildTree(template.getRootFolder()));
             this.treeFolders.setModel(tm);
             ComponentUtils.expandTree(treeFolders);
         } catch (Exception ex) {
             log.error("Error connecting to server", ex);
-            //JOptionPane.showMessageDialog(this.owner, "Verbindungsfehler: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             return;
         }
     }//GEN-LAST:event_cmbTemplatesActionPerformed
@@ -967,7 +968,6 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
             return;
         }
         newFolderName = newNameObject.toString();
-        //EditorsRegistry.getInstance().updateStatus("Adresse wird gespeichert...");
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
             DocumentFolder newFld = new DocumentFolder();
@@ -980,7 +980,7 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
             dm.insertNodeInto(newTn, tn, 0);
             this.cmbTemplatesActionPerformed(null);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Fehler beim Erstellen des Ordners: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Erstellen des Ordners: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_mnuNewFolderActionPerformed
 
@@ -1000,7 +1000,7 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
             this.cmbTemplatesActionPerformed(null);
 
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Fehler beim Erstellen des Ordners: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Erstellen des Ordners: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_mnuRemoveFolderActionPerformed
 
@@ -1013,6 +1013,9 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
     }//GEN-LAST:event_treeFoldersMouseReleased
 
     private void cmdCloneTemplateActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdCloneTemplateActionPerformed
+        if(this.cmbTemplates.getSelectedItem()==null)
+            return;
+        
         String name = JOptionPane.showInputDialog(this, "Name der Ordnerstruktur: ", "");
         if (name == null || "".equals(name)) {
             return;
@@ -1030,8 +1033,7 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
             }
         } catch (Exception ex) {
             log.error("Error connecting to server", ex);
-            //JOptionPane.showMessageDialog(this.owner, "Verbindungsfehler: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             return;
         }
     }//GEN-LAST:event_cmdCloneTemplateActionPerformed
@@ -1057,10 +1059,8 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
             DocumentFolder df = (DocumentFolder) tn.getUserObject();
             if (df.getParentId() == null) {
                 this.mnuRemoveFolder.setEnabled(false);
-//                this.mnuRenameFolder.setEnabled(false);
             } else {
                 this.mnuRemoveFolder.setEnabled(true);
-//                this.mnuRenameFolder.setEnabled(true);
             }
 
             this.popFolders.show(evt.getComponent(), evt.getX(), evt.getY());
@@ -1103,17 +1103,15 @@ public class DocumentFolderTemplatesDialog extends javax.swing.JDialog {
         //</editor-fold>
 
         /* Create and display the dialog */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                DocumentFolderTemplatesDialog dialog = new DocumentFolderTemplatesDialog(new javax.swing.JFrame(), true);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            DocumentFolderTemplatesDialog dialog = new DocumentFolderTemplatesDialog(new javax.swing.JFrame(), true);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
 

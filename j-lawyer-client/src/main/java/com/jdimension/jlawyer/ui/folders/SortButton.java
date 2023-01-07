@@ -664,11 +664,9 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 package com.jdimension.jlawyer.ui.folders;
 
 import java.awt.Font;
-import java.awt.event.MouseEvent;
-import java.io.InputStream;
+import java.awt.Insets;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
-import org.apache.log4j.Logger;
 import themes.colors.DefaultColorTheme;
 
 /**
@@ -677,52 +675,62 @@ import themes.colors.DefaultColorTheme;
  */
 public class SortButton extends JButton {
 
-    private static final Logger log = Logger.getLogger(SortButton.class.getName());
-
     public static int SORT_NONE = 10;
     public static int SORT_ASC = 20;
     public static int SORT_DESC = 30;
     
-    private static ImageIcon ICON_ASC=new javax.swing.ImageIcon(SortButton.class.getResource("/icons16/material/baseline_expand_less_white_48dp.png"));
-    private static ImageIcon ICON_DESC=new javax.swing.ImageIcon(SortButton.class.getResource("/icons16/material/baseline_expand_more_white_48dp.png"));
-    private static ImageIcon ICON_NONE=new javax.swing.ImageIcon(SortButton.class.getResource("/icons16/material/empty_20_1px.png"));
+    private static final ImageIcon ICON_ASC=new javax.swing.ImageIcon(SortButton.class.getResource("/icons16/material/baseline_expand_less_white_48dp.png"));
+    private static final ImageIcon ICON_DESC=new javax.swing.ImageIcon(SortButton.class.getResource("/icons16/material/baseline_expand_more_white_48dp.png"));
+    private ImageIcon ICON_NONE=new javax.swing.ImageIcon(SortButton.class.getResource("/icons16/material/empty_20_1px.png"));
 
     private int sortState = SORT_NONE;
+    
+    private String activeText=" ";
 
     public SortButton() {
         super();
         this.putClientProperty("JButton.buttonType", "roundRect");
 
-        try {
-            InputStream is = SortButton.class.getResourceAsStream("/fonts/exo2/exo2-bold.ttf");
-            Font font = Font.createFont(Font.TRUETYPE_FONT, is);
+        Font deriveFont=getFont().deriveFont(getFont().getStyle() | java.awt.Font.BOLD, getFont().getSize()-2);
+        setFont(deriveFont);
 
-            this.setFont(font.deriveFont(Font.BOLD, 12));
-        } catch (Throwable t) {
-            log.error("Unable to load font for SortButton", t);
-        }
-
-//        Font deriveFont=this.getFont().deriveFont((float)this.getFont().getSize() + 2f);
-//        this.setFont(deriveFont);
         addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
             public void mouseClicked(java.awt.event.MouseEvent evt) {
-                buttonClicked(evt);
+                buttonClicked();
             }
         });
 
         this.setBackground(DefaultColorTheme.COLOR_LIGHT_GREY);
         this.setForeground(DefaultColorTheme.COLOR_DARK_GREY);
         setIcon(ICON_NONE);
+        setMargin(new Insets(5, 5, 5, 5));
+    }
+    
+    public void setNoneIcon(ImageIcon icon) {
+        this.ICON_NONE=icon;
+        if (this.getSortState() == SORT_NONE) {
+            this.setIcon(ICON_NONE);
+        }
     }
 
-    private void buttonClicked(MouseEvent evt) {
+    @Override
+    public void setText(String string) {
+        this.activeText=string;
+        if(this.sortState!=SORT_NONE)
+            super.setText(string); 
+    }
+    
+    
+
+    private void buttonClicked() {
         if (this.getSortState() == SORT_NONE) {
             this.setSortState(SORT_ASC);
         } else if (this.getSortState() == SORT_ASC) {
             this.setSortState(SORT_DESC);
             
         } else if (this.getSortState() == SORT_DESC) {
-            this.setSortState(SORT_NONE);
+            this.setSortState(SORT_ASC);
             
         }
     }
@@ -743,15 +751,21 @@ public class SortButton extends JButton {
         if (this.getSortState() == SORT_ASC) {
             this.setBackground(DefaultColorTheme.COLOR_LOGO_GREEN);
             this.setForeground(DefaultColorTheme.COLOR_DARK_GREY);
+            super.setText(activeText);
             setIcon(ICON_ASC);
+            setMargin(new Insets(3, 2, 3, 9));
         } else if (this.getSortState() == SORT_DESC) {
             this.setBackground(DefaultColorTheme.COLOR_LOGO_BLUE);
             this.setForeground(DefaultColorTheme.COLOR_LIGHT_GREY);
+            super.setText(activeText);
             setIcon(ICON_DESC);
+            setMargin(new Insets(3, 2, 3, 9));
         } else if (this.getSortState() == SORT_NONE) {
             this.setBackground(DefaultColorTheme.COLOR_LIGHT_GREY);
             this.setForeground(DefaultColorTheme.COLOR_DARK_GREY);
             setIcon(ICON_NONE);
+            super.setText(null);
+            setMargin(new Insets(5, 5, 5, 5));
         }
         
     }

@@ -663,6 +663,7 @@
  */
 package com.jdimension.jlawyer.client.desktop;
 
+import com.jdimension.jlawyer.client.calendar.CalendarUtils;
 import com.jdimension.jlawyer.client.components.MultiCalDialog;
 import com.jdimension.jlawyer.client.configuration.PopulateOptionsEditor;
 import com.jdimension.jlawyer.client.editors.EditorsRegistry;
@@ -672,27 +673,33 @@ import com.jdimension.jlawyer.client.editors.files.EditArchiveFileDetailsPanel;
 import com.jdimension.jlawyer.client.editors.files.ViewArchiveFileDetailsPanel;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.client.settings.UserSettings;
-import com.jdimension.jlawyer.client.utils.FrameUtils;
 import com.jdimension.jlawyer.client.utils.StringUtils;
 import com.jdimension.jlawyer.persistence.ArchiveFileBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileReviewsBean;
+import com.jdimension.jlawyer.persistence.EventTypes;
 import com.jdimension.jlawyer.server.constants.ArchiveFileConstants;
 import com.jdimension.jlawyer.services.ArchiveFileServiceRemote;
+import com.jdimension.jlawyer.services.CalendarServiceRemote;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
 import com.jdimension.jlawyer.ui.tagging.TagUtils;
 import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
+import java.awt.Polygon;
+import java.awt.RenderingHints;
+import java.awt.Window;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import javax.swing.JOptionPane;
 import javax.swing.JTextField;
 import org.apache.log4j.Logger;
+import org.jdesktop.swingx.util.WindowUtils;
 import themes.colors.DefaultColorTheme;
 
 /**
@@ -702,65 +709,90 @@ import themes.colors.DefaultColorTheme;
 public class ReviewDueEntryPanel extends javax.swing.JPanel {
 
     private static final Logger log = Logger.getLogger(ReviewDueEntryPanel.class.getName());
-    private static SimpleDateFormat df = new SimpleDateFormat("dd.MM.yy");
 
-    private static Color lightGreen = new Color(153, 255, 102);
-    private static Color lightRed = new Color(255, 153, 153);
+    private static final String HTML_BR = "<br/>";
 
     private ReviewDueEntry e = null;
 
-    private Color defaultColor = Color.BLACK;
+    private String doneDescription = "";
+    private String unDoneDescription = "";
     
-    private String doneDescription="";
-    private String unDoneDescription="";
+    private boolean overDue=false;
+
+    private Color normalBackground = null;
+    private float alpha = DefaultColorTheme.DESKTOP_ALPHA_DEFAULT;
     
-    private Color normalBackground=null;
-    private float alpha=DefaultColorTheme.DESKTOP_ALPHA_DEFAULT;
+    private Color customBorderColor=DefaultColorTheme.COLOR_DARK_GREY;
+    private static Color OVERDUE_COLOR=new Color(-3407821);
 
     /**
-     * Creates new form HitPanel
+     * Creates new form ReviewDueEntryPanel
+     *
+     * @param background
      */
     public ReviewDueEntryPanel(Color background) {
         initComponents();
-        
-        this.normalBackground=background;
+
+        this.normalBackground = background;
         this.setBackground(background);
         this.setOpaque(false);
         this.lblDescription.setOpaque(false);
         this.lblTags.setOpaque(false);
         
-        ClientSettings settings=ClientSettings.getInstance();
-        String fontSizeOffset = settings.getConfiguration(settings.CONF_UI_FONTSIZEOFFSET, "0");
+        ClientSettings settings = ClientSettings.getInstance();
+        String fontSizeOffset = settings.getConfiguration(ClientSettings.CONF_UI_FONTSIZEOFFSET, "0");
         try {
             int offset = Integer.parseInt(fontSizeOffset);
-            Font currentFont=this.lblTags.getFont();
-            this.lblTags.setFont(currentFont.deriveFont((float)currentFont.getSize() + (float)offset));
+            Font currentFont = this.lblTags.getFont();
+            this.lblTags.setFont(currentFont.deriveFont((float) currentFont.getSize() + (float) offset));
         } catch (Throwable t) {
             log.error("Could not set font size", t);
         }
+
     }
-    
+
     @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g); 
+     protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        Dimension arcs = new Dimension(15,15);
+        int width = getWidth();
+        int height = getHeight();
+        Graphics2D graphics = (Graphics2D) g;
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        Graphics2D g2d = (Graphics2D) g.create();
-        g2d.setComposite(AlphaComposite.SrcOver.derive(this.alpha));
-        g2d.setColor(getBackground());
-        g2d.fillRect(0, 0, getWidth(), getHeight());
-        g2d.dispose();
+        
+        graphics.setComposite(AlphaComposite.SrcOver.derive(this.alpha));
+        graphics.setColor(getBackground());
 
-    }
+        //Draws the rounded opaque panel with borders.
+        graphics.setColor(getBackground());
+        graphics.fillRoundRect(0, 0, width-1, height-1, arcs.width, arcs.height);//paint background
+        graphics.setColor(getForeground());
+        
+        graphics.setColor(Color.WHITE);
+        graphics.drawRoundRect(0, 0, width-1, height-1, arcs.width, arcs.height);//paint border
+        graphics.drawRoundRect(1, 1, width-3, height-3, arcs.width, arcs.height);//paint border
+        graphics.drawRoundRect(2, 2, width-5, height-5, arcs.width, arcs.height);//paint border
+        
+        if(this.overDue) {
+            graphics.setColor(this.customBorderColor);
+            Polygon plgn = new Polygon();
+            plgn.addPoint(3, 3);
+            plgn.addPoint(17, 3);
+            plgn.addPoint(3, 17);
+            graphics.fillPolygon(plgn);
+        }
+     }
 
     public void setEntry(ReviewDueEntry entry) {
         this.e = entry;
-        //this.lblFileName.setText(sh.getFileName() + " in " + sh.getArchiveFileNumber() + " " + sh.getArchiveFileName());
 
         String reason = e.getReviewReason();
-        if(reason==null)
-            reason="";
-        
-        if (reason == null || "".equals(e.getReviewReason())) {
+        if (reason == null) {
+            reason = "";
+        }
+
+        if ("".equals(e.getReviewReason())) {
             reason = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("followup.nodescription");
         }
 
@@ -768,25 +800,28 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
             reason = reason.substring(0, 45) + "...";
         }
 
-        String fileNumber = e.getArchiveFileNumber();
-        if (fileNumber == null) {
-            fileNumber = "";
+        String caseNumber = e.getArchiveFileNumber();
+        if (caseNumber == null) {
+            caseNumber = "";
         }
 
-        String fileName = e.getArchiveFileName();
-        if (fileName == null) {
-            fileName = "";
+        String caseName = e.getArchiveFileName();
+        if (caseName == null) {
+            caseName = "";
         }
-        if (fileName.length() > 45) {
-            fileName = fileName.substring(0, 45) + "...";
+        if (caseName.length() > 45) {
+            caseName = caseName.substring(0, 45) + "...";
         }
 
-        String dueDate = "";
-        if (e.getDue() == null) {
-            dueDate = "";
-        } else {
-            dueDate = df.format(e.getDue()) + ": ";
+        String caseReason = e.getArchiveFileReason();
+        if (caseReason == null) {
+            caseReason = "";
         }
+        if (caseReason.length() > 53) {
+            caseReason = caseReason.substring(0, 53) + "...";
+        }
+
+        String dueDate = e.getReview().toString() + ": ";
 
         Date now = new Date();
         Date due = e.getDue();
@@ -802,41 +837,40 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
 
         if (!sameDay) {
             // not today, must be overdue
-            this.lblDescription.setForeground(Color.RED.darker());
+            this.lblDescription.setForeground(OVERDUE_COLOR);
+            this.customBorderColor=new Color(-3407821);
+            this.overDue=true;
+        } else {
+            this.lblDescription.setForeground(Color.BLACK);
+            this.customBorderColor=DefaultColorTheme.COLOR_DARK_GREY;
+            this.overDue=false;
         }
 
-        StringBuffer tooltip = new StringBuffer();
+        StringBuilder tooltip = new StringBuilder();
         tooltip.append("<html>");
-        if(this.e.getType()==ArchiveFileConstants.REVIEWTYPE_RESPITE) {
-            String respiteCaption=java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("caption.respite");
-            tooltip.append("<b><i><u>! " + respiteCaption + " !</u></i></b><br/>");
+        if (this.e.getType() == ArchiveFileConstants.REVIEWTYPE_RESPITE) {
+            String respiteCaption = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("caption.respite");
+            tooltip.append("<b><i><u>! ").append(respiteCaption).append(" !</u></i></b><br/>");
         } else {
-            String followUpCaption=java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("caption.followup");
-            tooltip.append("<b><i><u>" + followUpCaption + "</u></i></b><br/>");
+            String followUpCaption = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("caption.followup");
+            tooltip.append("<b><i><u>").append(followUpCaption).append("</u></i></b><br/>");
         }
-        String dueCaption=java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("caption.due");
-        tooltip.append("<b>" + dueCaption + ": " + dueDate + "</b><br/>" + StringUtils.nonEmpty(e.getReviewReason()));
-        String caseCaption=java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("caption.case");
-        tooltip.append("<br/>" + caseCaption + ": " + fileNumber + " " + e.getArchiveFileName());
-        String responsibleCaption=java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("caption.responsible");
-        tooltip.append("<br/>" + responsibleCaption + ": " + StringUtils.nonEmpty(e.getResponsible()));
+        String dueCaption = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("caption.due");
+        tooltip.append("<b>").append(dueCaption).append(": ").append(dueDate).append("</b><br/>").append(StringUtils.nonEmpty(e.getReviewReason()));
+        String caseCaption = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("caption.case");
+        tooltip.append(HTML_BR).append(caseCaption).append(": ").append(caseNumber).append(" ").append(e.getArchiveFileName());
+        String responsibleCaption = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("caption.responsible");
+        tooltip.append(HTML_BR).append(responsibleCaption).append(": ").append(StringUtils.nonEmpty(e.getResponsible()));
         tooltip.append("<html>");
         this.lblDescription.setToolTipText(tooltip.toString());
 
-        this.unDoneDescription="<html><b>" + dueDate + reason + "</b><br/>" + fileNumber + " " + fileName + "</html>";
-        this.doneDescription="<html><s><b>" + dueDate + reason + "</b><br/>" + fileNumber + " " + fileName + "</s></html>";
+        this.unDoneDescription = "<html><b>" + dueDate + reason + "</b><br/><font color=\"black\">" + caseNumber + " " + caseName + HTML_BR + caseReason + "</font></html>";
+        this.doneDescription = "<html><s><b>" + dueDate + reason + "</b><br/><font color=\"black\">" + caseNumber + " " + caseName + HTML_BR + caseReason + "</font></s></html>";
         this.lblDescription.setText(unDoneDescription);
         this.lblResponsible.setText(e.getResponsible());
-        if(e.getResponsible()!=null && !("".equalsIgnoreCase(e.getResponsible())))
+        if (e.getResponsible() != null && !("".equalsIgnoreCase(e.getResponsible()))) {
             this.lblResponsible.setIcon(UserSettings.getInstance().getUserSmallIcon(e.getResponsible()));
-        //this.lblFileName.setToolTipText("<html>" + StringUtils.addHtmlLinebreaks(sh.getText(), 60) + "</html>");
-        //this.lblDescription.setToolTipText(sh.getText());
-        //this.lblDescription.setIcon(FileUtils.getInstance().getFileTypeIcon(sh.getFileName()));
-//        if (ClientSettings.getInstance().getCurrentUser().getPrincipalId().equals(e.getResponsible())) {            
-//            this.lblResponsible.setFont(this.lblResponsible.getFont().deriveFont(Font.BOLD));
-//            //this.chkDescription.setFont(this.chkDescription.getFont().deriveFont(Font.BOLD));
-//            this.setBackground(Color.GREEN.brighter());
-//        }
+        }
 
         this.chkDescription.setSelected(false);
 
@@ -844,40 +878,34 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
         if (e.getType() == ArchiveFileConstants.REVIEWTYPE_RESPITE) {
             this.lblIcon.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/clicknrunred.png")));
             this.cmdPostpone.setEnabled(false);
-            //this.setBackground(lightRed);
-        } else if (UserSettings.getInstance().getCurrentUser().getPrincipalId().equals(e.getResponsible())) {
+        } else if (e.getType() == ArchiveFileConstants.REVIEWTYPE_EVENT) {
             this.lblIcon.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/clicknrun.png")));
-            this.lblResponsible.setFont(this.lblResponsible.getFont().deriveFont(Font.BOLD));
-            //this.setBackground(lightGreen);
         } else {
             this.lblIcon.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/clicknrungrey.png")));
         }
 
-        this.defaultColor = this.lblDescription.getForeground();
-        
-        this.lblTags.setText("");
-        if(e.getTags()!=null) {
-//            StringBuffer sb=new StringBuffer();
-//            sb.append("<html>");
-//            for(String t: e.getTags()) {
-//                //sb.append(t).append(", ");
-//                sb.append(t).append("<br/>");
-//            }
-//            sb.append("</html>");
-//            String tagString=sb.toString();
-//            
-//            this.lblTags.setText(tagString);
+        if (UserSettings.getInstance().getCurrentUser().getPrincipalId().equals(e.getResponsible())) {
+            this.lblResponsible.setFont(this.lblResponsible.getFont().deriveFont(Font.BOLD));
+            this.lblResponsible.setForeground(DefaultColorTheme.COLOR_LOGO_RED);
+        }
 
-            String tagList=TagUtils.getTagList(e.getTags());
-            String shortenedTagList=tagList;
+        this.lblTags.setText("");
+        if (e.getTags() != null) {
+
+            String tagList = TagUtils.getTagList(e.getTags());
+            String shortenedTagList = tagList;
             if (shortenedTagList.length() > 105) {
                 shortenedTagList = shortenedTagList.substring(0, 105) + "...";
             }
-            
+
             this.lblTags.setText(shortenedTagList);
             this.lblTags.setToolTipText(tagList);
+            
+            if(this.lblTags.getText().length()>0)
+                this.lblTags.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_label_grey_36dp.png")));
         }
-        
+        this.repaint();
+
     }
 
     /**
@@ -897,15 +925,15 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
         lblTags = new javax.swing.JLabel();
 
         addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                formMouseExited(evt);
-            }
             public void mouseEntered(java.awt.event.MouseEvent evt) {
                 formMouseEntered(evt);
             }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                formMouseExited(evt);
+            }
         });
 
-        lblResponsible.setFont(new java.awt.Font("Dialog", 2, 12)); // NOI18N
+        lblResponsible.setFont(lblResponsible.getFont().deriveFont((lblResponsible.getFont().getStyle() | java.awt.Font.ITALIC) & ~java.awt.Font.BOLD));
         lblResponsible.setForeground(new java.awt.Color(14, 114, 181));
         lblResponsible.setText("user");
 
@@ -924,6 +952,7 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
             }
         });
 
+        lblDescription.setFont(lblDescription.getFont());
         java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel"); // NOI18N
         lblDescription.setText(bundle.getString("label.followup")); // NOI18N
         lblDescription.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
@@ -947,7 +976,7 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
             }
         });
 
-        lblTags.setFont(new java.awt.Font("Dialog", 0, 10)); // NOI18N
+        lblTags.setFont(lblTags.getFont().deriveFont(lblTags.getFont().getStyle() & ~java.awt.Font.BOLD, lblTags.getFont().getSize()-2));
         lblTags.setForeground(new java.awt.Color(14, 114, 181));
         lblTags.setText(" ");
         lblTags.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -971,7 +1000,7 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(lblTags, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(lblDescription, javax.swing.GroupLayout.DEFAULT_SIZE, 499, Short.MAX_VALUE))
+                    .addComponent(lblDescription, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(layout.createSequentialGroup()
                         .addGap(41, 41, 41)
@@ -979,7 +1008,7 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(cmdPostpone)))
-                .addContainerGap())
+                .addGap(17, 17, 17))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -998,14 +1027,14 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
                         .addComponent(lblDescription)
                         .addGap(3, 3, 3)
                         .addComponent(lblTags)))
-                .addGap(3, 3, 3))
+                .addGap(6, 6, 6))
         );
     }// </editor-fold>//GEN-END:initComponents
 
     private void lblDescriptionMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblDescriptionMouseClicked
         try {
-            Object editor=null;
-            if(UserSettings.getInstance().isCurrentUserInRole(UserSettings.ROLE_WRITECASE)) {
+            Object editor = null;
+            if (UserSettings.getInstance().isCurrentUserInRole(UserSettings.ROLE_WRITECASE)) {
                 editor = EditorsRegistry.getInstance().getEditor(EditArchiveFileDetailsPanel.class.getName());
             } else {
                 editor = EditorsRegistry.getInstance().getEditor(ViewArchiveFileDetailsPanel.class.getName());
@@ -1030,7 +1059,7 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
                 aFile = fileService.getArchiveFile(this.e.getArchiveFileId());
             } catch (Exception ex) {
                 log.error("Error loading archive file from server", ex);
-                JOptionPane.showMessageDialog(this, java.text.MessageFormat.format(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("dialog.error.loadingcase"), new Object[] {ex.getMessage()}), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("msg.error"), JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, java.text.MessageFormat.format(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("dialog.error.loadingcase"), new Object[]{ex.getMessage()}), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("msg.error"), JOptionPane.ERROR_MESSAGE);
             }
 
             if (aFile == null) {
@@ -1042,19 +1071,17 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
             EditorsRegistry.getInstance().setMainEditorsPaneView((Component) editor);
         } catch (Exception ex) {
             log.error("Error creating editor from class " + this.getClass().getName(), ex);
-            JOptionPane.showMessageDialog(this, java.text.MessageFormat.format(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("dialog.error.loadingeditor"), new Object[] {ex.getMessage()}), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("msg.error"), JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, java.text.MessageFormat.format(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("dialog.error.loadingeditor"), new Object[]{ex.getMessage()}), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("msg.error"), JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_lblDescriptionMouseClicked
 
     private void lblDescriptionMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblDescriptionMouseEntered
-        //this.lblDescription.setForeground(DefaultColorTheme.COLOR_DARK_GREY);
-        this.alpha=DefaultColorTheme.DESKTOP_ALPHA_HIGHLIGHT;
-        this.setBackground(new Color(250,250,250));
+        this.alpha = DefaultColorTheme.DESKTOP_ALPHA_HIGHLIGHT;
+        this.setBackground(new Color(250, 250, 250));
     }//GEN-LAST:event_lblDescriptionMouseEntered
 
     private void lblDescriptionMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblDescriptionMouseExited
-        //this.lblDescription.setForeground(this.defaultColor);
-        this.alpha=DefaultColorTheme.DESKTOP_ALPHA_DEFAULT;
+        this.alpha = DefaultColorTheme.DESKTOP_ALPHA_DEFAULT;
         this.setBackground(this.normalBackground);
     }//GEN-LAST:event_lblDescriptionMouseExited
 
@@ -1066,7 +1093,7 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
         boolean done = false;
         if (this.chkDescription.isSelected()) {
             if (this.e.getType() == ArchiveFileConstants.REVIEWTYPE_RESPITE) {
-                int response = JOptionPane.showConfirmDialog(this, java.text.MessageFormat.format(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("dialog.confirm.setdone"), new Object[] {this.e.getReviewReason()}), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("dialog.confirm.setdone.title"), JOptionPane.YES_NO_OPTION);
+                int response = JOptionPane.showConfirmDialog(this, java.text.MessageFormat.format(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("dialog.confirm.setdone"), new Object[]{this.e.getReviewReason()}), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("dialog.confirm.setdone.title"), JOptionPane.YES_NO_OPTION);
                 if (response == JOptionPane.NO_OPTION) {
                     this.chkDescription.setSelected(false);
                     return;
@@ -1076,7 +1103,7 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
                 }
 
             } else {
-                done=true;
+                done = true;
             }
         } else {
             done = false;
@@ -1088,33 +1115,31 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
         ClientSettings settings = ClientSettings.getInstance();
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-            ArchiveFileServiceRemote fileService = locator.lookupArchiveFileServiceRemote();
-            fileService.updateReview(this.e.getArchiveFileId(), reviewDto);
+            CalendarServiceRemote calService = locator.lookupCalendarServiceRemote();
+            calService.updateReview(this.e.getArchiveFileId(), reviewDto);
         } catch (Exception ex) {
             log.error("Error updating review", ex);
-            JOptionPane.showMessageDialog(this, java.text.MessageFormat.format(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("dialog.error.saving"), new Object[] {ex.getMessage()}), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("msg.error"), JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, java.text.MessageFormat.format(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("dialog.error.saving"), new Object[]{ex.getMessage()}), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/desktop/ReviewDueEntryPanel").getString("msg.error"), JOptionPane.ERROR_MESSAGE);
             return;
         }
-        
-        if(done)
+
+        if (done) {
             this.lblDescription.setText(this.doneDescription);
-        else
+        } else {
             this.lblDescription.setText(this.unDoneDescription);
-        
+        }
+
     }//GEN-LAST:event_chkDescriptionMouseClicked
 
     private void cmdPostponeActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdPostponeActionPerformed
-        JTextField hiddenField=new JTextField();
+        JTextField hiddenField = new JTextField();
         MultiCalDialog dlg = new MultiCalDialog(hiddenField, EditorsRegistry.getInstance().getMainWindow(), true);
-        //dlg.setLocation(this.getX() + this.cmdPostpone.getX(), this.getY() + this.cmdPostpone.getY());
-        FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
         dlg.setVisible(true);
         Date d = null;
         try {
             SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy");
             d = df.parse(hiddenField.getText());
         } catch (Throwable t) {
-            //JOptionPane.showMessageDialog(this, "Wiedervorlagedatum ungültig", "Wiedervorlage verschieben", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         this.e.setDue(d);
@@ -1122,42 +1147,65 @@ public class ReviewDueEntryPanel extends javax.swing.JPanel {
         // update data
         EditorsRegistry.getInstance().updateStatus("Wiedervorlage/Frist wird aktualisiert...");
         ArchiveFileReviewsBean arb = e.getReview();
-        arb.setReviewDate(d);
+
+        if (arb.getEventType() == EventTypes.EVENTTYPE_EVENT) {
+            Calendar evCal = Calendar.getInstance();
+            evCal.setTime(arb.getBeginDate());
+            int hour = evCal.get(Calendar.HOUR_OF_DAY);
+            int minute = evCal.get(Calendar.MINUTE);
+            evCal.setTime(d);
+            evCal.set(Calendar.HOUR_OF_DAY, hour);
+            evCal.set(Calendar.MINUTE, minute);
+            long diff = evCal.getTime().getTime() - arb.getBeginDate().getTime();
+            arb.setBeginDate(evCal.getTime());
+            if (arb.getEndDate() != null) {
+                arb.setEndDate(new Date(arb.getEndDate().getTime() + diff));
+            }
+        } else {
+            arb.setBeginDate(d);
+        }
         ClientSettings settings = ClientSettings.getInstance();
         JLawyerServiceLocator locator = null;
-        try {
-            locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-            ArchiveFileServiceRemote fileService = locator.lookupArchiveFileServiceRemote();
-            fileService.updateReview(arb.getArchiveFileKey().getId(), arb);
-        } catch (Exception ex) {
-            log.error("Error updating review", ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Bearbeiten der Wiedervorlage: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            EditorsRegistry.getInstance().clearStatus();
-            return;
-        }
-        EditorsRegistry.getInstance().clearStatus();
-            
+        Window parentWindow = WindowUtils.findWindow(this);
+        if (CalendarUtils.checkForConflicts(parentWindow, arb)) {
+            try {
+                locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+                CalendarServiceRemote calService = locator.lookupCalendarServiceRemote();
+                calService.updateReview(arb.getArchiveFileKey().getId(), arb);
+            } catch (Exception ex) {
+                log.error("Error updating review", ex);
+                JOptionPane.showMessageDialog(this, "Fehler beim Bearbeiten der Wiedervorlage: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+                EditorsRegistry.getInstance().clearStatus();
+                return;
+            }
+
+            boolean postPonedDone = this.chkDescription.isSelected();
             // update UI
             this.setEntry(e);
+            this.chkDescription.setSelected(postPonedDone);
+        }
+        EditorsRegistry.getInstance().clearStatus();
+
+
     }//GEN-LAST:event_cmdPostponeActionPerformed
 
     private void formMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_formMouseEntered
-        this.alpha=DefaultColorTheme.DESKTOP_ALPHA_HIGHLIGHT;
-        this.setBackground(new Color(250,250,250));
+        this.alpha = DefaultColorTheme.DESKTOP_ALPHA_HIGHLIGHT;
+        this.setBackground(new Color(250, 250, 250));
     }//GEN-LAST:event_formMouseEntered
 
     private void formMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_formMouseExited
-        this.alpha=DefaultColorTheme.DESKTOP_ALPHA_DEFAULT;
+        this.alpha = DefaultColorTheme.DESKTOP_ALPHA_DEFAULT;
         this.setBackground(this.normalBackground);
     }//GEN-LAST:event_formMouseExited
 
     private void lblTagsMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblTagsMouseEntered
-        this.alpha=DefaultColorTheme.DESKTOP_ALPHA_HIGHLIGHT;
-        this.setBackground(new Color(250,250,250));
+        this.alpha = DefaultColorTheme.DESKTOP_ALPHA_HIGHLIGHT;
+        this.setBackground(new Color(250, 250, 250));
     }//GEN-LAST:event_lblTagsMouseEntered
 
     private void lblTagsMouseExited(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblTagsMouseExited
-        this.alpha=DefaultColorTheme.DESKTOP_ALPHA_DEFAULT;
+        this.alpha = DefaultColorTheme.DESKTOP_ALPHA_DEFAULT;
         this.setBackground(this.normalBackground);
     }//GEN-LAST:event_lblTagsMouseExited
 

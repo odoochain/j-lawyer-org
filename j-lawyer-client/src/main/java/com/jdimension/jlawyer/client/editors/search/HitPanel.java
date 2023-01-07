@@ -705,9 +705,7 @@ public class HitPanel extends javax.swing.JPanel {
 
     public void setSearchHit(SearchHit sh) {
         this.hit = sh;
-        //this.lblFileName.setText(sh.getFileName() + " in " + sh.getArchiveFileNumber() + " " + sh.getArchiveFileName());
         this.lblFileName.setText("<html><b>" + sh.getFileName() + "</b><br/>" + sh.getArchiveFileNumber() + " " + sh.getArchiveFileName() + "</html>");
-        //this.lblFileName.setToolTipText("<html>" + StringUtils.addHtmlLinebreaks(sh.getText(), 60) + "</html>");
         this.lblFileName.setToolTipText(sh.getText());
         this.lblFileName.setIcon(FileUtils.getInstance().getFileTypeIcon(sh.getFileName()));
         this.lblScore.setText(df.format((float) sh.getScore()));
@@ -734,7 +732,7 @@ public class HitPanel extends javax.swing.JPanel {
         lblScore = new javax.swing.JLabel();
         cmdEditArchiveFile = new javax.swing.JButton();
 
-        lblFileName.setFont(new java.awt.Font("Dialog", 0, 12)); // NOI18N
+        lblFileName.setFont(lblFileName.getFont().deriveFont(lblFileName.getFont().getStyle() & ~java.awt.Font.BOLD));
         lblFileName.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/file_doc.png"))); // NOI18N
         lblFileName.setText("Dokumentname und Icon");
         lblFileName.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
@@ -750,13 +748,13 @@ public class HitPanel extends javax.swing.JPanel {
             }
         });
 
-        lblScore.setFont(new java.awt.Font("Dialog", 3, 12)); // NOI18N
+        lblScore.setFont(lblScore.getFont().deriveFont((lblScore.getFont().getStyle() | java.awt.Font.ITALIC)));
         lblScore.setForeground(new java.awt.Color(0, 0, 255));
         lblScore.setText("87%");
 
         cmdEditArchiveFile.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/folder.png"))); // NOI18N
         cmdEditArchiveFile.setToolTipText("zur Akte springen (bearbeiten)");
-        cmdEditArchiveFile.setBorder(new javax.swing.border.SoftBevelBorder(0));
+        cmdEditArchiveFile.setBorder(new javax.swing.border.SoftBevelBorder(javax.swing.border.BevelBorder.RAISED));
         cmdEditArchiveFile.setInheritsPopupMenu(true);
         cmdEditArchiveFile.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -770,11 +768,11 @@ public class HitPanel extends javax.swing.JPanel {
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
+                .addComponent(cmdEditArchiveFile)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(lblFileName)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 321, Short.MAX_VALUE)
                 .addComponent(lblScore)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(cmdEditArchiveFile)
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -782,11 +780,12 @@ public class HitPanel extends javax.swing.JPanel {
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(lblScore, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(lblFileName, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(layout.createSequentialGroup()
                         .addComponent(cmdEditArchiveFile)
-                        .addGap(0, 0, Short.MAX_VALUE)))
+                        .addGap(0, 0, Short.MAX_VALUE))
+                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(lblScore, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(lblFileName, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
                 .addContainerGap())
         );
     }// </editor-fold>//GEN-END:initComponents
@@ -827,7 +826,7 @@ public class HitPanel extends javax.swing.JPanel {
                 aFile = fileService.getArchiveFile(this.hit.getArchiveFileId());
             } catch (Exception ex) {
                 log.error("Error loading archive file from server", ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Laden der Akte: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Fehler beim Laden der Akte: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             }
 
             if (aFile == null) {
@@ -839,40 +838,31 @@ public class HitPanel extends javax.swing.JPanel {
             EditorsRegistry.getInstance().setMainEditorsPaneView((Component) editor);
         } catch (Exception ex) {
             log.error("Error creating editor from class " + this.getClass().getName(), ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Laden des Editors: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden des Editors: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_cmdEditArchiveFileActionPerformed
 
     private void lblFileNameMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblFileNameMouseClicked
 
-        boolean readOnly = true;
         ClientSettings settings = ClientSettings.getInstance();
         JLawyerServiceLocator locator = null;
         byte[] content=null;
         try {
             locator=JLawyerServiceLocator.getInstance(settings.getLookupProperties());
             content = locator.lookupArchiveFileServiceRemote().getDocumentContent(this.hit.getId());
-            //tmpUrl = FileUtils.createTempFile(hit.getFileName(), content);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Fehler beim Laden des Dokuments: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden des Dokuments: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             return;
         }
 
         try {
             ReadOnlyDocumentStore store=new ReadOnlyDocumentStore("hitpanel-" + hit.getFileName(), hit.getFileName());
                 
-            Launcher launcher=LauncherFactory.getLauncher(hit.getFileName(), content, store);
+            Launcher launcher=LauncherFactory.getLauncher(hit.getFileName(), content, store, EditorsRegistry.getInstance().getMainWindow());
             launcher.launch(false);
-//            if (appLauncher.internallyLaunchable(tmpUrl)) {
-//                String afId=hit.getArchiveFileId();
-//                ArchiveFileBean contextArchiveFile=locator.lookupArchiveFileServiceRemote().getArchiveFile(afId);
-//                appLauncher.launchInternally(tmpUrl, readOnly, contextArchiveFile);
-//            } else {
-//                appLauncher.openInNativeApplication(tmpUrl, readOnly);
-//            }
 
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Fehler beim Öffnen des Dokuments: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Öffnen des Dokuments: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
 

@@ -668,11 +668,13 @@ import com.jdimension.jlawyer.server.services.MonitoringSnapshot;
 import com.jdimension.jlawyer.server.services.ServerInformation;
 import java.io.File;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Properties;
 import javax.ejb.Remote;
 import org.jlawyer.data.tree.GenericNode;
+import org.jlawyer.plugins.calculation.GenericCalculationTable;
 
 /**
  *
@@ -703,14 +705,6 @@ public interface SystemManagementRemote {
     
     public void clearCurrentBackup();
 
-    //boolean deleteTemplate(String fileName) throws Exception;
-    
-    //boolean addTemplateFromTemplate(String fileName, String basedOnTemplateFileName) throws Exception;
-
-    //Collection getAllTemplateNames();
-    
-    //List<String> getPlaceHoldersInTemplate(String templateName) throws Exception;
-
     List<AppUserBean> getUsers();
 
     List<AppRoleBean> getRoles(String principalId);
@@ -720,12 +714,6 @@ public interface SystemManagementRemote {
     AppUserBean updateUser(AppUserBean user, List<AppRoleBean> roles) throws Exception;
 
     void deleteUser(String principalId);
-
-    
-    
-    //byte[] getTemplateContent(String fileName) throws Exception;
-
-    //void setTemplateContent(String fileName, byte[] content) throws Exception;
 
     ServerInformation getServerInformation();
 
@@ -741,7 +729,7 @@ public interface SystemManagementRemote {
     
     void testSendMail(String smtpHost, int smtpPort, String smtpUser, String smtpPwd, boolean smtpSsl, boolean smtpStartTls, String mailAddress) throws Exception;
     
-    void testReceiveMail(String mailAddress, String host, String protocol, boolean ssl, String user, String pwd) throws Exception;
+    void testReceiveMail(String mailAddress, String host, String protocol, boolean ssl, String user, String pwd, boolean isMsExchange, String clientId, String clientSecret, String authToken) throws Exception;
 
     boolean validateFileOnServer(File file, boolean isDirectory);
 
@@ -756,8 +744,6 @@ public interface SystemManagementRemote {
     String getServerInterfacesBoundTo() throws Exception;
 
     boolean setServerInterfaceBindings(String ip) throws Exception;
-
-    //boolean addTemplate(String fileName, byte[] data) throws Exception;
 
     boolean addTemplate(GenericNode folder, String fileName, byte[] data) throws Exception;
 
@@ -789,7 +775,7 @@ public interface SystemManagementRemote {
 
     void renameTemplate(GenericNode folder, String fromName, String toName) throws Exception;
 
-    Collection<PartyTypeBean> getPartyTypes();
+    List<PartyTypeBean> getPartyTypes();
 
     Hashtable<String,PartyTypeBean> getPartyTypesTable();
 
@@ -800,5 +786,23 @@ public interface SystemManagementRemote {
     void removePartyType(PartyTypeBean partyType) throws Exception;
 
     void addObservedFile(String fileName, byte[] content) throws Exception;
+
+    boolean updatePassword(String newPassword) throws Exception;
+
+    boolean updatePasswordForUser(String principalId, String newPassword) throws Exception;
+
+    List<MappingTable> getMappingTables();
+    
+    List<MappingEntry> getMappingEntries(String tableName);
+    
+    void updateMappingEntries(String tableName, List<MappingEntry> newEntries) throws Exception;
+
+    MappingTable addMappingTable(MappingTable table) throws Exception;
+
+    void deleteMappingTable(String tableName) throws Exception;
+
+    MappingTable updateMappingTable(MappingTable mt) throws Exception;
+
+    HashMap<String,Object> getPlaceHolderValues(HashMap<String,Object> placeHolders, ArchiveFileBean aFile, List<PartiesTriplet> selectedParties, String dictateSign, GenericCalculationTable calculationTable, HashMap<String,String> formsPlaceHolderValues, AppUserBean caseLawyer, AppUserBean caseAssistant, AppUserBean author) throws Exception;
     
 }

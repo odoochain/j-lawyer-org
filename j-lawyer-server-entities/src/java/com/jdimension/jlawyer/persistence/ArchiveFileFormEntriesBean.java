@@ -703,7 +703,7 @@ public class ArchiveFileFormEntriesBean implements Serializable {
     @Column(name = "entry_key")
     private String entryKey;
     
-    @Column(name = "string_value")
+    @Column(name = "string_value",columnDefinition="MEDIUMTEXT")
     private String stringValue;
     
     
@@ -774,14 +774,14 @@ public class ArchiveFileFormEntriesBean implements Serializable {
     }
 
     /**
-     * @return the key
+     * @return the entries key
      */
     public String getEntryKey() {
         return entryKey;
     }
 
     /**
-     * @param key the key to set
+     * @param entryKey the key to set
      */
     public void setEntryKey(String entryKey) {
         this.entryKey = entryKey;

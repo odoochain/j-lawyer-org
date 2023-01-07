@@ -723,7 +723,7 @@ public class HtmlPanel extends javax.swing.JPanel implements PreviewPanel {
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 589, Short.MAX_VALUE)
+            .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 369, Short.MAX_VALUE)
             .addGroup(layout.createSequentialGroup()
                 .addComponent(cmdSave)
                 .addGap(0, 0, Short.MAX_VALUE))
@@ -733,7 +733,7 @@ public class HtmlPanel extends javax.swing.JPanel implements PreviewPanel {
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                 .addComponent(cmdSave)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 347, Short.MAX_VALUE))
+                .addComponent(jScrollPane1))
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -746,7 +746,7 @@ public class HtmlPanel extends javax.swing.JPanel implements PreviewPanel {
                 locator.lookupArchiveFileServiceRemote().setDocumentContent(this.id, this.html.getText().getBytes());
             } catch (Throwable t) {
                 log.error("Error saving document with id " + this.id, t);
-                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Speichern: " + t.getMessage(), "Fehler");
+                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Speichern: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
                 
             }
             ThreadUtils.enableComponent(cmdSave, true);

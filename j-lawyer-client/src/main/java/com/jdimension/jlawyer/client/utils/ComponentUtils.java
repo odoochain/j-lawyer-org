@@ -668,9 +668,13 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Graphics;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseMotionAdapter;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.List;
-import javax.swing.BorderFactory;
+import javax.swing.ComboBoxModel;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
@@ -678,6 +682,7 @@ import javax.swing.JList;
 import javax.swing.JPopupMenu;
 import javax.swing.JSplitPane;
 import javax.swing.JTable;
+import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.MenuElement;
 import javax.swing.border.Border;
@@ -685,7 +690,12 @@ import javax.swing.plaf.basic.BasicSplitPaneDivider;
 import javax.swing.plaf.basic.BasicSplitPaneUI;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
+import javax.swing.tree.TreePath;
 import org.apache.log4j.Logger;
+import org.jdesktop.swingx.autocomplete.AutoCompleteDecorator;
+import org.jdesktop.swingx.autocomplete.AutoCompleteDocument;
+import org.jdesktop.swingx.autocomplete.ComboBoxAdaptor;
+import org.jdesktop.swingx.autocomplete.ListAdaptor;
 import themes.colors.DefaultColorTheme;
 
 /**
@@ -702,6 +712,38 @@ public class ComponentUtils {
             tree.expandRow(i);
         }
     }
+    
+    public static void addDropRenderer(JTree tree) {
+        tree.addMouseMotionListener(new MouseMotionAdapter() {
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                int x = (int) e.getPoint().getX();
+                int y = (int) e.getPoint().getY();
+                int row=tree.getRowForLocation(x, y);
+                
+                JTree.DropLocation dropLocation = tree.getDropLocation();
+                if (dropLocation != null
+                        && dropLocation.getChildIndex() == -1
+                        && tree.getRowForPath(dropLocation.getPath()) == row) {
+                    // this row represents the current drop location
+                    // so render it specially, perhaps with a different color
+                    tree.getComponentAt(x, y).setForeground(Color.GREEN);
+
+                }
+                
+//                int x = (int) e.getPoint().getX();
+//                int y = (int) e.getPoint().getY();
+//                //TreePath path = tree.getPathForLocation(x, y);
+//                int row=tree.getRowForLocation(x, y);
+//////                if (path == null) {
+//////                    tree.setCursor(Cursor.getDefaultCursor());
+//////                } else {
+//////                    tree.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+//////                }
+//            }
+            }
+        });
+    }
 
     public static Object[] getAllListElements(JList list) {
         int size = list.getModel().getSize(); // 4
@@ -717,6 +759,15 @@ public class ComponentUtils {
 
     }
 
+    public static boolean containsItem(JComboBox cmb, Object item) {
+        ComboBoxModel cmbModel=cmb.getModel();
+        for(int i=0;i<cmbModel.getSize();i++) {
+            if(cmbModel.getElementAt(i).equals(item))
+                return true;
+        }
+        return false;
+    }
+    
     public static void addAllItemsToCombobox(JComboBox cmb, Object[] objects) {
         for (int i = 0; i < objects.length; i++) {
             cmb.addItem(objects[i]);
@@ -740,16 +791,6 @@ public class ComponentUtils {
     }
 
     public static void autoSizeColumns(JTable table) {
-        //        final TableColumnModel columnModel = table.getColumnModel();
-//    for (int column = 0; column < table.getColumnCount(); column++) {
-//        int width = 50; // Min width
-//        for (int row = 0; row < table.getRowCount(); row++) {
-//            TableCellRenderer renderer = table.getCellRenderer(row, column);
-//            Component comp = table.prepareRenderer(renderer, row, column);
-//            width = Math.max(comp.getPreferredSize().width, width);
-//        }
-//        columnModel.getColumn(column).setPreferredWidth(width);
-//    }
 
         if (table.getRowCount() == 0) {
             return;
@@ -771,8 +812,6 @@ public class ComponentUtils {
 
                         TableCellRenderer cellRenderer = table.getCellRenderer(row, column);
 
-//                    System.out.print("r " + row + ", c " + column + " t: " + table.getRowCount());
-//                    System.out.println(": " + table.getModel().getValueAt(row, column));
                         Component c = table.prepareRenderer(cellRenderer, row, column);
                         int width = c.getPreferredSize().width + table.getIntercellSpacing().width;
                         preferredWidth = Math.max(preferredWidth, width);
@@ -856,7 +895,7 @@ public class ComponentUtils {
     }
 
     public static String[] getSelectedMenuItems(JPopupMenu pop) {
-        ArrayList<String> list = new ArrayList<String>();
+        ArrayList<String> list = new ArrayList<>();
         for (MenuElement me : pop.getSubElements()) {
             if (me.getComponent() instanceof JCheckBoxMenuItem) {
                 JCheckBoxMenuItem mi = ((JCheckBoxMenuItem) me.getComponent());
@@ -876,9 +915,78 @@ public class ComponentUtils {
             }
         }
     }
+    
+    public static List<String> getPopupMenuItems(JPopupMenu pop) {
+        ArrayList<String> items=new ArrayList<>();
+        for (MenuElement me : pop.getSubElements()) {
+            if (me.getComponent() instanceof JCheckBoxMenuItem) {
+                JCheckBoxMenuItem mi = ((JCheckBoxMenuItem) me.getComponent());
+                items.add(mi.getText());
+            }
+        }
+        return items;
+    }
+    
+    public static List<String> getSelectedPopupMenuItems(JPopupMenu pop) {
+        ArrayList<String> items=new ArrayList<>();
+        for (MenuElement me : pop.getSubElements()) {
+            if (me.getComponent() instanceof JCheckBoxMenuItem) {
+                JCheckBoxMenuItem mi = ((JCheckBoxMenuItem) me.getComponent());
+                if(mi.isSelected())
+                    items.add(mi.getText());
+            }
+        }
+        return items;
+    }
+    
+    public static String getSelectedPopupMenuItemsAsString(JPopupMenu pop) {
+        List<String> items=getSelectedPopupMenuItems(pop);
+        StringBuilder sb=new StringBuilder();
+        for (String i: items) {
+            sb.append(i).append(", ");
+        }
+        String result=sb.toString();
+        if(result.endsWith(", "))
+            result=result.substring(0, result.length()-2);
+        return result;
+    }
+    
+    public static void selectPopupMenuItems(JPopupMenu pop, List<String> selectedItems) {
+        for (MenuElement me : pop.getSubElements()) {
+            if (me.getComponent() instanceof JCheckBoxMenuItem) {
+                JCheckBoxMenuItem mi = ((JCheckBoxMenuItem) me.getComponent());
+                if(selectedItems.contains(mi.getText()))
+                    mi.setSelected(true);
+                else
+                    mi.setSelected(false);
+            }
+        }
+    }
 
     public static void decorateSplitPane(JSplitPane split) {
         decorateSplitPane(split, null);
+    }
+
+    public static void restoreSplitPane(JSplitPane split, Class container, String componentName) {
+        try {
+            String dividerLocation = ClientSettings.getInstance().getConfiguration("split." + container.getName() + "." + componentName, "");
+            if (!"".equalsIgnoreCase(dividerLocation)) {
+                split.setDividerLocation(Integer.parseInt(dividerLocation));
+            }
+        } catch (Throwable t) {
+            log.error("Could not set divider location for " + componentName + " in " + container.getName(), t);
+        }
+    }
+    
+    public static void persistSplitPane(JSplitPane split, Class container, String componentName) {
+        split.addPropertyChangeListener((PropertyChangeEvent evt) -> {
+            if (evt.getPropertyName().equals(JSplitPane.DIVIDER_LOCATION_PROPERTY)) {
+                if (split.getDividerLocation() > 0) {
+                    ClientSettings s = ClientSettings.getInstance();
+                    s.setConfiguration("split." + container.getName() + "." + componentName, "" + split.getDividerLocation());
+                }
+            }
+        });
     }
 
     public static void decorateSplitPane(JSplitPane split, Color dividerColor) {
@@ -886,24 +994,17 @@ public class ComponentUtils {
         split.setOneTouchExpandable(false);
         divider.setDividerSize(5);
 
-        //divider.setBorder(BorderFactory.createTitledBorder(divider.getBorder(), "Custom border title -- gets rid of the one-touch arrows!"));
-        //divider.setBackground(DefaultColorTheme.COLOR_DARK_GREY);
-//        if(dividerColor!=null) {
-//            divider.setBorder(BorderFactory.createLineBorder(dividerColor, 1, false));
-//            divider.setBackground(dividerColor);
-//        } else {
-//            divider.setBorder(BorderFactory.createLineBorder(DefaultColorTheme.COLOR_DARK_GREY, 1, false));
-//            divider.setBackground(DefaultColorTheme.COLOR_DARK_GREY);
-//        }
         split.setUI(new BasicSplitPaneUI() {
+            @Override
             public BasicSplitPaneDivider createDefaultDivider() {
                 return new BasicSplitPaneDivider(this) {
+                    @Override
                     public void setBorder(Border b) {
                     }
 
                     @Override
                     public void paint(Graphics g) {
-                        if(dividerColor!=null) {
+                        if (dividerColor != null) {
                             g.setColor(dividerColor);
                         } else {
                             g.setColor(DefaultColorTheme.COLOR_DARK_GREY);
@@ -916,5 +1017,19 @@ public class ComponentUtils {
         });
         split.setBorder(null);
 
+    }
+    
+    public static void addAutoComplete(JComboBox cmb) {
+//        ComboBoxAdaptor cmbAdaptor = new ComboBoxAdaptor(cmb);
+//        AutoCompleteDocument autoCompDoc = new AutoCompleteDocument(cmbAdaptor, false);
+//        AutoCompleteDecorator.decorate(cmb);
+        AutoCompleteDecorator.decorate(cmb);
+    }
+    
+    public static void addAutoComplete(JTextField txt, String[] candidates) {
+        JList dataList = new JList(candidates);
+        ListAdaptor listAdaptor = new ListAdaptor(dataList, txt);
+        AutoCompleteDocument autoCompDoc = new AutoCompleteDocument(listAdaptor, false);
+        AutoCompleteDecorator.decorate(txt, autoCompDoc, listAdaptor);
     }
 }

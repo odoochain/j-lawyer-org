@@ -664,7 +664,9 @@
 package com.jdimension.jlawyer.persistence;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import javax.persistence.*;
 import javax.xml.bind.annotation.XmlRootElement;
 
@@ -677,6 +679,7 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlRootElement
 @NamedQueries({
     @NamedQuery(name = "CaseFolder.findAll", query = "SELECT a FROM CaseFolder a"),
+    @NamedQuery(name = "CaseFolder.findByParentId", query = "SELECT a FROM CaseFolder a WHERE a.parentId = :parentId"),
     @NamedQuery(name = "CaseFolder.findById", query = "SELECT a FROM CaseFolder a WHERE a.id = :id")})
 public class CaseFolder implements Serializable {
     
@@ -699,7 +702,8 @@ public class CaseFolder implements Serializable {
     @OneToMany(cascade = CascadeType.REMOVE, mappedBy = "folder")
     private List<ArchiveFileDocumentsBean> documents;
     
-    
+    @OneToMany(cascade = CascadeType.REMOVE, mappedBy = "folder", fetch = FetchType.LAZY)
+    protected List<CaseFolderSettings> settings;
     
     public CaseFolder() {
     }
@@ -728,6 +732,10 @@ public class CaseFolder implements Serializable {
     public String getParentId() {
         return parentId;
     }
+    
+    public boolean isRoot() {
+        return this.parentId==null;
+    }
 
     /**
      * @param parentId the parentId to set
@@ -754,7 +762,33 @@ public class CaseFolder implements Serializable {
      * @return the children
      */
     public List<CaseFolder> getChildren() {
+        if(this.children==null) {
+            this.children=new ArrayList<CaseFolder>();
+        }
         return children;
+    }
+    
+    public List<String> getAllFolderIds() {
+        ArrayList<String> idList=new ArrayList<>();
+        this.collectFolderIds(this, idList);
+        return idList;
+    }
+    
+    private void collectFolderIds(CaseFolder f, List<String> idList) {
+        idList.add(f.getId());
+        for(CaseFolder child: f.getChildren()) {
+            collectFolderIds(child, idList);
+        }
+    }
+    
+    public boolean hasChild(String name) {
+        if(this.children!=null) {
+            for(CaseFolder c: this.children) {
+                if(c.getName().equalsIgnoreCase(name))
+                    return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -781,6 +815,45 @@ public class CaseFolder implements Serializable {
      */
     public void setDocuments(List<ArchiveFileDocumentsBean> documents) {
         this.documents = documents;
+    }
+
+    /**
+     * @return the settings
+     */
+    public List<CaseFolderSettings> getSettings() {
+        return settings;
+    }
+
+    /**
+     * @param settings the settings to set
+     */
+    public void setSettings(List<CaseFolderSettings> settings) {
+        this.settings = settings;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final CaseFolder other = (CaseFolder) obj;
+        if (!Objects.equals(this.id, other.id)) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 67 * hash + Objects.hashCode(this.id);
+        return hash;
     }
 
     

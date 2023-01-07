@@ -674,24 +674,19 @@ import com.jdimension.jlawyer.client.launcher.LauncherFactory;
 import com.jdimension.jlawyer.client.launcher.ReadOnlyDocumentStore;
 import com.jdimension.jlawyer.client.processing.ProgressIndicator;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
-import com.jdimension.jlawyer.client.settings.UserSettings;
 import com.jdimension.jlawyer.client.utils.*;
-import com.jdimension.jlawyer.persistence.AppUserBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileDocumentsBean;
+import com.jdimension.jlawyer.persistence.CaseFolder;
+import com.jdimension.jlawyer.server.utils.ContentTypes;
 import com.jdimension.jlawyer.services.ArchiveFileServiceRemote;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
-import java.awt.Color;
 import java.awt.Dimension;
+import java.beans.PropertyChangeEvent;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collection;
-import javax.mail.Multipart;
-import javax.mail.Part;
-import javax.mail.internet.MimeBodyPart;
 import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
@@ -704,9 +699,10 @@ import org.jlawyer.bea.model.Attachment;
 import org.jlawyer.bea.model.Message;
 import org.jlawyer.bea.model.MessageExport;
 import org.jlawyer.bea.model.MessageJournalEntry;
-import org.jlawyer.bea.model.PostBox;
 import org.jlawyer.bea.model.ProcessCard;
 import org.jlawyer.bea.model.ProcessCardEntry;
+import org.jlawyer.bea.model.VerificationResult;
+import themes.colors.DefaultColorTheme;
 
 /**
  *
@@ -715,19 +711,30 @@ import org.jlawyer.bea.model.ProcessCardEntry;
 public class BeaMessageContentUI extends javax.swing.JPanel implements HyperlinkListener {
 
     private static final Logger log = Logger.getLogger(BeaMessageContentUI.class.getName());
-    private static SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy HH:mm");
-    private static String HTML_WARNING = "<html><font color=\"red\">HTML-Inhalte werden zum Schutz vor Spam erst auf Knopfdruck im Kopfbereich dieser E-Mail oder nach Doppelklick auf diese Warnung angezeigt.<br/>Der Absender dieser E-Mail wird dann permanent als vertrauensw&uuml;rdig eingestuft.</font></html>";
+    private static final String DATEFORMAT = "dd.MM.yyyy HH:mm";
     private Message msgContainer = null;
-    private String cachedHtml = null;
     private String documentId = null;
+    private ArchiveFileBean caseContext=null;
+    
+    private static final ImageIcon ICON_SENDSTATUS_INVALID=new javax.swing.ImageIcon(BeaMessageContentUI.class.getResource("/com/jdimension/jlawyer/client/bea/send-invalid.png"));
+    private static final ImageIcon ICON_SENDSTATUS_UNKNOWN=new javax.swing.ImageIcon(BeaMessageContentUI.class.getResource("/com/jdimension/jlawyer/client/bea/send-unknown.png"));
+    private static final ImageIcon ICON_SENDSTATUS_SUCCESS=new javax.swing.ImageIcon(BeaMessageContentUI.class.getResource("/com/jdimension/jlawyer/client/bea/send-success.png"));
+    private static final ImageIcon ICON_SENDSTATUS_FAIL=new javax.swing.ImageIcon(BeaMessageContentUI.class.getResource("/com/jdimension/jlawyer/client/bea/send-failed.png"));
 
     /**
-     * Creates new form MailContentUI
+     * Creates new form BeaMessageContentUI
      */
     public BeaMessageContentUI() {
         initComponents();
+        
+        this.jLabel1.setForeground(DefaultColorTheme.COLOR_LOGO_BLUE);
+        this.jLabel2.setForeground(DefaultColorTheme.COLOR_LOGO_BLUE);
+        this.jLabel3.setForeground(DefaultColorTheme.COLOR_LOGO_BLUE);
 
         ComponentUtils.decorateSplitPane(jSplitPane1);
+        
+        this.lblSendStatus.setText("");
+        this.lblSendStatus.setToolTipText("");
 
         this.jScrollPane1.setPreferredSize(new Dimension((int) this.jScrollPane1.getSize().getWidth(), (int) this.jScrollPane1.getSize().getHeight()));
 
@@ -735,20 +742,47 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
         this.lblCaseNumber.setText(" ");
         this.lblReferenceJustice.setText(" ");
 
+        this.lstAttachments.setCellRenderer(new AttachmentListCellRenderer());
         this.lstAttachments.setModel(new DefaultListModel());
+        
+        this.lstAttachmentsTechnical.setCellRenderer(new AttachmentListCellRenderer());
+        this.lstAttachmentsTechnical.setModel(new DefaultListModel());
 
         this.editBody.setEditorKit(new StyledEditorKit());
         this.editBody.addHyperlinkListener(this);
 
         DefaultTableModel tm = new DefaultTableModel(new String[]{"Benutzer (Ereignis)", "Benutzername (Ereignis)", "Dateiname des Anhangs", "Ereignis", "Zeitpunkt"}, 0);
         this.tblJournal.setModel(tm);
-        TableRowSorter<TableModel> sorter = new TableRowSorter<TableModel>(tm);
+        TableRowSorter<TableModel> sorter = new TableRowSorter<>(tm);
         sorter.setComparator(4, new DescendingDateTimeStringComparator());
         this.tblJournal.setRowSorter(sorter);
 
         DefaultTableModel tm2 = new DefaultTableModel(new String[]{"Code", "Text"}, 0);
         this.tblProcessCard.setModel(tm2);
         this.cmdShowProcessCard.setEnabled(false);
+
+        jSplitPane1.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, (PropertyChangeEvent evt) -> {
+            SwingUtilities.invokeLater(() -> {
+                try {
+
+                    if (jSplitPane1.getHeight() <= 0) {
+                        return;
+                    }
+
+                    double divLoc = (double) jSplitPane1.getDividerLocation() / (double) jSplitPane1.getHeight();
+                    if (divLoc < 0.1d) {
+                        jSplitPane1.setDividerLocation(0.1d);
+                    }
+                    if (divLoc > 0.9d) {
+                        jSplitPane1.setDividerLocation(0.9d);
+                    }
+                } catch (Throwable t) {
+                    log.warn("invalid split pane location", t);
+                }
+            });
+        });
+        ComponentUtils.restoreSplitPane(this.jSplitPane1, this.getClass(), "jSplitPane1");
+        ComponentUtils.persistSplitPane(this.jSplitPane1, this.getClass(), "jSplitPane1");
 
     }
 
@@ -763,26 +797,18 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
         this.lblTo.setText(" ");
         this.lblTo.setToolTipText(null);
 
-        this.editBody.setContentType("text/plain");
+        this.editBody.setContentType(ContentTypes.TEXT_PLAIN);
 
         this.editBody.setText("");
 
         ((DefaultListModel) this.lstAttachments.getModel()).removeAllElements();
+        ((DefaultListModel) this.lstAttachmentsTechnical.getModel()).removeAllElements();
     }
 
     public String getBody() {
 
         return this.editBody.getText();
 
-//        if("text/plain".equalsIgnoreCase(this.editBody.getContentType()))
-//            return this.editBody.getText();
-//        else
-//            return "";
-//        try {
-//            return this.editBody.getDocument().getText(0, editBody.getDocument().getLength());
-//        } catch (Throwable t) {
-//            return "";
-//        }
     }
 
     public String getContentType() {
@@ -791,6 +817,10 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
 
     public void setErrorMessage(String errorMessage) {
         this.editBody.setText(errorMessage);
+    }
+    
+    public void setCase(ArchiveFileBean a) {
+        this.caseContext=a;
     }
 
     public void setMessage(org.jlawyer.bea.model.Message msg, String documentId) {
@@ -804,13 +834,7 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
         }
         try {
 
-            if (msg == null) {
-                return;
-            }
-
             System.out.println("TODO: set message read");
-//            if (!(msgC.isRead()))
-//                msgC.setRead(true);
 
             System.out.println("TODO: load with progressindicator");
             if (false) {
@@ -818,41 +842,31 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                 ProgressIndicator dlg = new ProgressIndicator(EditorsRegistry.getInstance().getMainWindow(), true);
                 dlg.setShowCancelButton(false);
                 dlg.setInfinite(true);
-                DecimalFormat df = new DecimalFormat("###0.00");
-//                dlg.progress("Lade Email... (" + df.format(msg.getSize() / 1024 / 1024) + "MB)");
-//                LoadEmailAction lea = new LoadEmailAction(dlg, this, msg, this.lblSubject, this.lblSentDate, this.lblTo, this.lblCC, this.lblFrom, this.editBody, this.lstAttachments, this.cmdShowHtml);
-//                lea.start();
                 return;
             } else {
-                BeaMessageContentUI.setMessageImpl(this, msg, this.lblSubject, this.lblSentDate, this.lblTo, this.lblFrom, this.lblCaseNumber, this.lblReferenceJustice, this.editBody, this.lstAttachments, false, this.tblJournal, this.tblProcessCard, this.lblEeb, this.jTabbedPane1);
+                BeaMessageContentUI.setMessageImpl(msg, this.lblSubject, this.lblSentDate, this.lblTo, this.lblFrom, this.lblCaseNumber, this.lblReferenceJustice, this.editBody, this.lstAttachments, this.lstAttachmentsTechnical, this.tblJournal, this.tblProcessCard, this.lblEeb, this.jTabbedPane1, this.cmdVerifySignatures, this.lblSendStatus);
             }
 
         } catch (Exception ex) {
             log.error("Error getting contents of beA message", ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Öffnen der Nachricht: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-            //EditorsRegistry.getInstance().clearStatus();
+            JOptionPane.showMessageDialog(this, "Fehler beim Öffnen der Nachricht: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    public static void setMessageImpl(BeaMessageContentUI contentUI, Message msg, JLabel lblSubject, JLabel lblSentDate, JLabel lblTo, JLabel lblFrom, JLabel lblCaseNumber, JLabel lblReferenceJustice, JEditorPane editBody, JList lstAttachments, boolean edt, JTable journalTable, JTable processCardTable, JLabel lblEeb, JTabbedPane tabs) throws Exception {
+    public static void setMessageImpl(Message msg, JLabel lblSubject, JLabel lblSentDate, JLabel lblTo, JLabel lblFrom, JLabel lblCaseNumber, JLabel lblReferenceJustice, JEditorPane editBody, JList lstAttachments, JList lstAttachmentsTechnical, JTable journalTable, JTable processCardTable, JLabel lblEeb, JTabbedPane tabs, JButton cmdVerify, JLabel lblSndStatus) throws Exception {
         // we copy the message to avoid the "Unable to load BODYSTRUCTURE" issue
 
-        AppUserBean cu = UserSettings.getInstance().getCurrentUser();
-//        if (EmailUtils.isReceiptRequested(msg)) {
-//            int response = JOptionPane.showConfirmDialog(contentUI, "Der Absender hat eine Lesebestätigung angefordert - jetzt senden?", "Lesebestätigung", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-//            if (response == JOptionPane.YES_OPTION) {
-//                EmailUtils.sendReceipt(cu, msg.getSubject(), MimeUtility.decodeText(msg.getFrom()[0].toString()));
-//            }
-//        }
-
         if (msg.getReceptionTime() == null) {
-            log.warn("beA mesage " + msg.getId() + " - " + msg.getSubject() + " does not have a reception time yet!");
+            log.warn("beA message " + msg.getId() + " - " + msg.getSubject() + " does not have a reception time yet!");
             lblSentDate.setText("");
         } else {
-            lblSentDate.setText(df.format(msg.getReceptionTime()));
+            SimpleDateFormat df2 = new SimpleDateFormat(DATEFORMAT);
+            lblSentDate.setText(df2.format(msg.getReceptionTime()));
         }
-        lblSubject.setText(msg.getSubject());
-        lblSubject.setToolTipText(lblSubject.getText());
+        String shortened=msg.getSubject();
+        shortened=shortened.substring(0,Math.min(150, shortened.length()));
+        lblSubject.setText(shortened);
+        lblSubject.setToolTipText(msg.getSubject());
         lblFrom.setText(msg.getSenderName());
         lblCaseNumber.setText(msg.getReferenceNumber());
         lblReferenceJustice.setText(msg.getReferenceJustice());
@@ -874,182 +888,30 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
         lblTo.setText(to);
         lblTo.setToolTipText(to);
 
-//        String cc = "";
-//        if (copiedMsg.getRecipients(RecipientType.CC) != null && copiedMsg.getRecipients(RecipientType.CC).length > 0) {
-//            cc = copiedMsg.getRecipients(RecipientType.CC)[0].toString();
-//            for (int i = 1; i < copiedMsg.getRecipients(RecipientType.CC).length; i++) {
-//                cc = cc + ", " + copiedMsg.getRecipients(RecipientType.CC)[i].toString();
-//            }
-//        }
-//        lblCC.setText(cc);
-//        lblCC.setToolTipText(cc);
         ((DefaultListModel) lstAttachments.getModel()).removeAllElements();
         ArrayList<Attachment> attachments = msg.getAttachments();
         for (Attachment a : attachments) {
-            ((DefaultListModel) lstAttachments.getModel()).addElement(a);
+            if(a.isTechnicalAttachment())
+                ((DefaultListModel) lstAttachmentsTechnical.getModel()).addElement(a);
+            else
+                ((DefaultListModel) lstAttachments.getModel()).addElement(a);
+        }
+        ArrayList<Attachment> vhnAttachments = msg.getVhnAttachments();
+        for (Attachment a : vhnAttachments) {
+            ((DefaultListModel) lstAttachmentsTechnical.getModel()).addElement(a);
         }
 
-//
-//        if (copiedMsg.isMimeType("multipart/*")) {
-//            String html = recursiveFindPart(copiedMsg.getContent(), "text/html");
-//            if (html != null) {
-//                editBody.setContentType("text/html");
-//                //html = this.cleanUpHTML(html);
-//
-//                // do this AFTER setContentType and BEFORE setText!!!
-//                editBody.getDocument().putProperty("IgnoreCharsetDirective", Boolean.TRUE);
-//
-//
-//                try {
-//                    Font font = new Font("Arial", Font.PLAIN, 13);
-//                    String bodyRule = "body { font-family: " + font.getFamily() + "; "
-//                            + "font-size: " + font.getSize() + "pt; }";
-//
-//                    String pRule = "p { font-family: " + font.getFamily() + "; "
-//                            + "font-size: " + font.getSize() + "pt; }";
-//
-//                    String spanRule = "span { font-family: " + font.getFamily() + "; "
-//                            + "font-size: " + font.getSize() + "pt; }";
-//
-//                    String divRule = "p { font-family: " + font.getFamily() + "; "
-//                            + "font-size: " + font.getSize() + "pt; }";
-//
-//                    ((HTMLDocument) editBody.getDocument()).getStyleSheet().addRule(bodyRule);
-//                    ((HTMLDocument) editBody.getDocument()).getStyleSheet().addRule(pRule);
-//                    ((HTMLDocument) editBody.getDocument()).getStyleSheet().addRule(spanRule);
-//                    ((HTMLDocument) editBody.getDocument()).getStyleSheet().addRule(divRule);
-//
-//                } catch (Throwable t) {
-//                    log.error("could not set default font for HTML mail", t);
-//                }
-//
-//                html = html.replaceAll("font-size:.{1,7}pt", "font-size:13pt");
-//
-//                ClientSettings s = ClientSettings.getInstance();
-//                String whitelist = s.getConfiguration(s.CONF_MAIL_HTMLWHITELIST, "");
-//                int index = whitelist.indexOf(lblFrom.getText());
-//                if (index > -1) {
-//                    cmdShowHtml.setEnabled(false);
-//                    Dimension d=editBody.getParent().getParent().getSize();
-//                    editBody.setText(html);
-//                    editBody.getParent().getParent().setSize(d);
-//                } else {
-//                    contentUI.setCachedHtml(html);
-//                    //this.cachedHtml = html;
-//                    cmdShowHtml.setEnabled(true);
-//                    Dimension d=editBody.getParent().getParent().getSize();
-//                    editBody.setText(HTML_WARNING);
-//                    editBody.getParent().getParent().setSize(d);
-//                }
-//                editBody.setCaretPosition(0);
-//
-////                    File t=File.createTempFile("" + System.currentTimeMillis(), ".html");
-////                    FileWriter fw=new FileWriter(t);
-////                    fw.write(html);
-////                    fw.close();
-////                    try {
-////                    this.editBody.setPage(t.toURI().toURL());
-////                    } catch (Throwable th) {
-////                        th.printStackTrace();
-////                    }
-//            } else {
-//                String text = recursiveFindPart(copiedMsg.getContent(), "text/plain");
-//                if (text != null) {
-//                    editBody.setContentType("text/plain");
-//
-//                    Dimension d=editBody.getParent().getParent().getSize();
-//                    editBody.setText(text);
-//                    editBody.setCaretPosition(0);
-//                    editBody.getParent().getParent().setSize(d);
-//                } else {
-//                    editBody.setContentType("text/plain");
-//
-//                    Dimension d=editBody.getParent().getParent().getSize();
-//                    editBody.setText("unknown message content");
-//                    editBody.setCaretPosition(0);
-//                    editBody.getParent().getParent().setSize(d);
-//                }
-//            }
-//        } else {
-//            if (copiedMsg.isMimeType("text/plain")) {
-//                //this.editBody.setContentType(msg.getContentType());
-//                editBody.setContentType("text/plain");
-//                Dimension d=editBody.getParent().getParent().getSize();
-//                editBody.setText(copiedMsg.getContent().toString());
-//                editBody.setCaretPosition(0);
-//                editBody.getParent().getParent().setSize(d);
-//            } else if (copiedMsg.isMimeType("text/html")) {
-//                editBody.setContentType("text/html");
-//                String body = copiedMsg.getContent().toString();
-//
-//                //body = body.replaceAll("<meta content=\"text/html;charset=ISO-8859-1\" http-equiv=\"Content-Type\">", "");
-////                    body = this.cleanUpHTML(body);
-////                    this.editBody.setText(body);
-////                    
-//
-//                editBody.setContentType("text/html");
-//                //html = this.cleanUpHTML(html);
-//
-//                // do this AFTER setContentType and BEFORE setText!!!
-//                editBody.getDocument().putProperty("IgnoreCharsetDirective", Boolean.TRUE);
-//
-//
-//                try {
-//                    Font font = new Font("Arial", Font.PLAIN, 13);
-//                    String bodyRule = "body { font-family: " + font.getFamily() + "; "
-//                            + "font-size: " + font.getSize() + "pt; }";
-//
-//                    String pRule = "p { font-family: " + font.getFamily() + "; "
-//                            + "font-size: " + font.getSize() + "pt; }";
-//
-//                    String spanRule = "span { font-family: " + font.getFamily() + "; "
-//                            + "font-size: " + font.getSize() + "pt; }";
-//
-//                    String divRule = "p { font-family: " + font.getFamily() + "; "
-//                            + "font-size: " + font.getSize() + "pt; }";
-//
-//                    ((HTMLDocument) editBody.getDocument()).getStyleSheet().addRule(bodyRule);
-//                    ((HTMLDocument) editBody.getDocument()).getStyleSheet().addRule(pRule);
-//                    ((HTMLDocument) editBody.getDocument()).getStyleSheet().addRule(spanRule);
-//                    ((HTMLDocument) editBody.getDocument()).getStyleSheet().addRule(divRule);
-//
-//                } catch (Throwable t) {
-//                    log.error("could not set default font for HTML mail", t);
-//                }
-//
-//                body = body.replaceAll("font-size:.{1,7}pt", "font-size:13pt");
-//
-//                ClientSettings s = ClientSettings.getInstance();
-//                String whitelist = s.getConfiguration(s.CONF_MAIL_HTMLWHITELIST, "");
-//                int index = whitelist.indexOf(lblFrom.getText());
-//                if (index > -1) {
-//                    cmdShowHtml.setEnabled(false);
-//                    Dimension d=editBody.getParent().getParent().getSize();
-//                    editBody.setText(body);
-//                    editBody.getParent().getParent().setSize(d);
-//                } else {
-//                    contentUI.setCachedHtml(body);
-//                    //this.cachedHtml = body;
-//                    cmdShowHtml.setEnabled(true);
-//                    Dimension d=editBody.getParent().getParent().getSize();
-//                    editBody.setText(HTML_WARNING);
-//                    editBody.getParent().getParent().setSize(d);
-//                }
-//                editBody.setCaretPosition(0);
-//            }
-//            //this.editBody.setText(msg.getContent().toString());
-//        }
-//        editBody.setCaretPosition(0);
         editBody.setText(msg.getBody());
 
         DefaultTableModel tm = new DefaultTableModel(new String[]{"Benutzer (Ereignis)", "Benutzername (Ereignis)", "Dateiname des Anhangs", "Ereignis", "Zeitpunkt"}, 0);
         journalTable.setModel(tm);
-        TableRowSorter<TableModel> sorter = new TableRowSorter<TableModel>(tm);
+        TableRowSorter<TableModel> sorter = new TableRowSorter<>(tm);
         sorter.setComparator(4, new DescendingDateTimeStringComparator());
         journalTable.setRowSorter(sorter);
+        SimpleDateFormat df2 = new SimpleDateFormat(DATEFORMAT);
         if (msg.getJournal() != null) {
             for (MessageJournalEntry e : msg.getJournal()) {
-                ((DefaultTableModel) journalTable.getModel()).addRow(new Object[]{e.getFromSurnameFirstname(), e.getFromUsername(), e.getAttachmentReference(), e.getEventType(), df.format(e.getTimestamp())});
+                ((DefaultTableModel) journalTable.getModel()).addRow(new Object[]{e.getFromSurnameFirstname(), e.getFromUsername(), e.getAttachmentReference(), e.getEventType(), df2.format(e.getTimestamp())});
 
             }
         }
@@ -1058,44 +920,50 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
         processCardTable.setModel(tm2);
         tabs.setIconAt(2, null);
         if (msg.getProcessCard() != null) {
-            if (msg.getProcessCard().getEntries().size() > 0) {
+            if (msg.getProcessCard().getEntries().size() > 0 || !StringUtils.isEmpty(msg.getProcessCard().getExceptionMessage())) {
                 tabs.setIconAt(2, new javax.swing.ImageIcon(BeaMessageContentUI.class.getResource("/icons/messagebox_warning.png")));
             }
+            if(!StringUtils.isEmpty(msg.getProcessCard().getExceptionMessage())) {
+                ((DefaultTableModel) processCardTable.getModel()).addRow(new Object[]{"", msg.getProcessCard().getExceptionMessage()});
+            }
             for (ProcessCardEntry e : msg.getProcessCard().getEntries()) {
-                ((DefaultTableModel) processCardTable.getModel()).addRow(new Object[]{e.getCode(), e.getText()});
+                ((DefaultTableModel) processCardTable.getModel()).addRow(new Object[]{StringUtils.nonEmpty(e.getCode()), e.getText()});
 
             }
         }
-
-    }
-
-    public void setCachedHtml(String html) {
-        this.cachedHtml = html;
-    }
-
-    private String cleanUpHTML(String html) {
-        String lowerHtml = html.toLowerCase();
-
-        String find = "<meta content=\"text/html";
-        int start = lowerHtml.indexOf(find);
-
-        find = "<meta http-equiv=\"content-type\"";
-        int start2 = lowerHtml.indexOf(find);
-
-        if (start2 > start) {
-            start = start2;
+        
+        if(!StringUtils.isEmpty(msg.getVerificationStatus())) {
+            cmdVerify.setIcon(BeaAccess.getSignatureStatusIcon(msg.getVerificationStatus()));
+            cmdVerify.setToolTipText("Status der Signaturprüfungen unbekannt");
+            if (msg.getVerificationStatus().equalsIgnoreCase(VerificationResult.STATUS_SUCCESS)) {
+                cmdVerify.setToolTipText("alle Signaturen korrekt");
+            } else if (msg.getVerificationStatus().equalsIgnoreCase(VerificationResult.STATUS_PARTIAL)) {
+                cmdVerify.setToolTipText("einige Signaturen mit unbekanntem Status");
+            } else if (msg.getVerificationStatus().equalsIgnoreCase(VerificationResult.STATUS_FAILED)) {
+                cmdVerify.setToolTipText("eine odere mehrere inkorrekte Signaturen");
+            }
         }
-
-        if (start > -1) {
-            String snip1 = lowerHtml.substring(start + 1);
-            int end = snip1.indexOf(">");
-            String result = html.substring(0, start) + html.substring(end + start + 2);
-            return result;
+        
+        int sendStatus=msg.getSentStatus();
+        lblSndStatus.setIcon(ICON_SENDSTATUS_UNKNOWN);
+        switch (sendStatus) {
+            case Message.SENDSTATUS_FAIL:
+                lblSndStatus.setIcon(ICON_SENDSTATUS_FAIL);
+                break;
+            case Message.SENDSTATUS_SUCCESS:
+                lblSndStatus.setIcon(ICON_SENDSTATUS_SUCCESS);
+                break;
+            case Message.SENDSTATUS_INVALID:
+                lblSndStatus.setIcon(ICON_SENDSTATUS_INVALID);
+                break;
+            default:
+                break;
         }
-        return html;
+        String sendDescription=msg.getSentStatusDescription();
+        lblSndStatus.setToolTipText(sendDescription);
 
     }
-
+    
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -1119,19 +987,22 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
         lblSubject = new javax.swing.JLabel();
         lblFrom = new javax.swing.JLabel();
         lblTo = new javax.swing.JLabel();
+        lblCaseNumber = new javax.swing.JLabel();
+        lblReferenceJustice = new javax.swing.JLabel();
+        jSeparator1 = new javax.swing.JSeparator();
         jSplitPane1 = new javax.swing.JSplitPane();
         jScrollPane1 = new javax.swing.JScrollPane();
         editBody = new javax.swing.JEditorPane();
         jPanel2 = new javax.swing.JPanel();
-        jLabel7 = new javax.swing.JLabel();
+        tabAttachments = new javax.swing.JTabbedPane();
         jScrollPane2 = new javax.swing.JScrollPane();
         lstAttachments = new javax.swing.JList();
-        jLabel4 = new javax.swing.JLabel();
-        lblCaseNumber = new javax.swing.JLabel();
-        jLabel6 = new javax.swing.JLabel();
-        lblReferenceJustice = new javax.swing.JLabel();
-        lblEeb = new javax.swing.JLabel();
+        jScrollPane5 = new javax.swing.JScrollPane();
+        lstAttachmentsTechnical = new javax.swing.JList<>();
         cmdToPdf = new javax.swing.JButton();
+        cmdVerifySignatures = new javax.swing.JButton();
+        lblSendStatus = new javax.swing.JLabel();
+        lblEeb = new javax.swing.JLabel();
         jPanel4 = new javax.swing.JPanel();
         jScrollPane3 = new javax.swing.JScrollPane();
         tblJournal = new javax.swing.JTable();
@@ -1155,7 +1026,7 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
         mnuSave.add(mnuSearchSave);
 
         mnuSaveAsFile.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/filesave.png"))); // NOI18N
-        mnuSaveAsFile.setText("als Datei...");
+        mnuSaveAsFile.setText("als lokale Datei...");
         mnuSaveAsFile.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 mnuSaveAsFileActionPerformed(evt);
@@ -1165,14 +1036,20 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
 
         popAttachments.add(mnuSave);
 
-        jPanel1.setBorder(new javax.swing.border.LineBorder(java.awt.SystemColor.controlDkShadow, 1, true));
+        jPanel3.setBackground(new java.awt.Color(255, 255, 255));
 
+        jPanel1.setBackground(new java.awt.Color(255, 255, 255));
+
+        jLabel1.setFont(jLabel1.getFont());
         jLabel1.setText("Betreff:");
 
+        jLabel2.setFont(jLabel2.getFont());
         jLabel2.setText("Von:");
 
+        jLabel3.setFont(jLabel3.getFont());
         jLabel3.setText("An:");
 
+        lblSentDate.setFont(lblSentDate.getFont());
         lblSentDate.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
         lblSentDate.setText("Datum");
 
@@ -1181,6 +1058,12 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
         lblFrom.setText(" ");
 
         lblTo.setText(" ");
+
+        lblCaseNumber.setFont(lblCaseNumber.getFont());
+        lblCaseNumber.setText("<AZ>");
+
+        lblReferenceJustice.setFont(lblReferenceJustice.getFont());
+        lblReferenceJustice.setText("<AZ Justiz>");
 
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
@@ -1197,8 +1080,16 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                         .addComponent(lblSubject, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(lblSentDate))
-                    .addComponent(lblFrom, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(lblTo, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
+                    .addGroup(jPanel1Layout.createSequentialGroup()
+                        .addComponent(lblFrom, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(lblCaseNumber))
+                    .addGroup(jPanel1Layout.createSequentialGroup()
+                        .addComponent(lblTo, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(lblReferenceJustice)))
+                .addContainerGap())
+            .addComponent(jSeparator1)
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1210,17 +1101,24 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel2)
-                    .addComponent(lblFrom))
+                    .addComponent(lblFrom)
+                    .addComponent(lblCaseNumber))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel3)
-                    .addComponent(lblTo))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(lblTo)
+                    .addComponent(lblReferenceJustice))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jSeparator1, javax.swing.GroupLayout.PREFERRED_SIZE, 10, javax.swing.GroupLayout.PREFERRED_SIZE))
         );
 
-        jSplitPane1.setDividerLocation(300);
+        jSplitPane1.setBackground(new java.awt.Color(255, 255, 255));
+        jSplitPane1.setBorder(null);
+        jSplitPane1.setDividerLocation(200);
         jSplitPane1.setOrientation(javax.swing.JSplitPane.VERTICAL_SPLIT);
 
+        jScrollPane1.setBackground(new java.awt.Color(255, 255, 255));
+        jScrollPane1.setBorder(null);
         jScrollPane1.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 
         editBody.setEditable(false);
@@ -1233,10 +1131,11 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
 
         jSplitPane1.setLeftComponent(jScrollPane1);
 
-        jPanel2.setBorder(new javax.swing.border.LineBorder(java.awt.SystemColor.controlDkShadow, 1, true));
+        jPanel2.setBackground(new java.awt.Color(255, 255, 255));
 
-        jLabel7.setText("Anhänge:");
+        tabAttachments.setTabPlacement(javax.swing.JTabbedPane.LEFT);
 
+        jScrollPane2.setBorder(null);
         jScrollPane2.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 
         lstAttachments.setModel(new javax.swing.AbstractListModel() {
@@ -1260,36 +1159,49 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
         });
         jScrollPane2.setViewportView(lstAttachments);
 
+        tabAttachments.addTab("Anhänge", jScrollPane2);
+
+        jScrollPane5.setBorder(null);
+        jScrollPane5.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+
+        lstAttachmentsTechnical.setModel(new javax.swing.AbstractListModel<String>() {
+            String[] strings = { "Item 1", "Item 2", "Item 3", "Item 4", "Item 5" };
+            public int getSize() { return strings.length; }
+            public String getElementAt(int i) { return strings[i]; }
+        });
+        lstAttachmentsTechnical.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_INTERVAL_SELECTION);
+        lstAttachmentsTechnical.setLayoutOrientation(javax.swing.JList.HORIZONTAL_WRAP);
+        lstAttachmentsTechnical.setVisibleRowCount(-1);
+        lstAttachmentsTechnical.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                lstAttachmentsTechnicalMouseClicked(evt);
+            }
+            public void mousePressed(java.awt.event.MouseEvent evt) {
+                lstAttachmentsTechnicalMousePressed(evt);
+            }
+            public void mouseReleased(java.awt.event.MouseEvent evt) {
+                lstAttachmentsTechnicalMouseReleased(evt);
+            }
+        });
+        jScrollPane5.setViewportView(lstAttachmentsTechnical);
+
+        tabAttachments.addTab("weitere", jScrollPane5);
+
         javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
         jPanel2Layout.setHorizontalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel2Layout.createSequentialGroup()
-                .addComponent(jLabel7)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 732, Short.MAX_VALUE))
+            .addComponent(tabAttachments, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, 837, Short.MAX_VALUE)
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel2Layout.createSequentialGroup()
-                .addComponent(jLabel7)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-            .addComponent(jScrollPane2, javax.swing.GroupLayout.Alignment.TRAILING)
+                .addContainerGap()
+                .addComponent(tabAttachments, javax.swing.GroupLayout.DEFAULT_SIZE, 102, Short.MAX_VALUE)
+                .addContainerGap())
         );
 
         jSplitPane1.setRightComponent(jPanel2);
-
-        jLabel4.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/folder.png"))); // NOI18N
-        jLabel4.setText("Aktenzeichen Absender:");
-
-        lblCaseNumber.setText("<AZ>");
-
-        jLabel6.setText("Empfänger:");
-
-        lblReferenceJustice.setText("<AZ Justiz>");
-
-        lblEeb.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/lassists.png"))); // NOI18N
-        lblEeb.setEnabled(false);
 
         cmdToPdf.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/fileicons/file_type_pdf.png"))); // NOI18N
         cmdToPdf.setToolTipText("Nachricht als PDF anzeigen / drucken");
@@ -1298,6 +1210,21 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                 cmdToPdfActionPerformed(evt);
             }
         });
+
+        cmdVerifySignatures.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/material/baseline_policy_black_24dp.png"))); // NOI18N
+        cmdVerifySignatures.setToolTipText("Signaturen prüfen");
+        cmdVerifySignatures.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cmdVerifySignaturesActionPerformed(evt);
+            }
+        });
+
+        lblSendStatus.setFont(lblSendStatus.getFont());
+        lblSendStatus.setIcon(new javax.swing.ImageIcon(getClass().getResource("/com/jdimension/jlawyer/client/bea/send-invalid.png"))); // NOI18N
+        lblSendStatus.setText("Sendestatus");
+
+        lblEeb.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons16/lassists.png"))); // NOI18N
+        lblEeb.setEnabled(false);
 
         javax.swing.GroupLayout jPanel3Layout = new javax.swing.GroupLayout(jPanel3);
         jPanel3.setLayout(jPanel3Layout);
@@ -1308,37 +1235,29 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                 .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jSplitPane1)
                     .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel3Layout.createSequentialGroup()
-                        .addComponent(jLabel4)
+                    .addGroup(jPanel3Layout.createSequentialGroup()
+                        .addComponent(cmdToPdf)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(lblCaseNumber)
-                        .addGap(18, 18, 18)
-                        .addComponent(jLabel6)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(lblReferenceJustice)
+                        .addComponent(cmdVerifySignatures)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(lblEeb)
+                        .addComponent(lblSendStatus)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(cmdToPdf)))
+                        .addComponent(lblEeb)))
                 .addContainerGap())
         );
         jPanel3Layout.setVerticalGroup(
             jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel3Layout.createSequentialGroup()
                 .addContainerGap()
-                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(jLabel4)
-                            .addComponent(lblCaseNumber)
-                            .addComponent(jLabel6)
-                            .addComponent(lblReferenceJustice))
-                        .addComponent(cmdToPdf, javax.swing.GroupLayout.Alignment.TRAILING))
-                    .addComponent(lblEeb))
+                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(cmdVerifySignatures, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(cmdToPdf, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(lblSendStatus, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(lblEeb, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jSplitPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 342, Short.MAX_VALUE)
+                .addComponent(jSplitPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 336, Short.MAX_VALUE)
                 .addContainerGap())
         );
 
@@ -1460,36 +1379,11 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
     }// </editor-fold>//GEN-END:initComponents
 
     private void lstAttachmentsMouseReleased(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lstAttachmentsMouseReleased
-        if (evt.isPopupTrigger() && evt.getComponent().isEnabled()) {
-
-            if (this.lstAttachments.getSelectedValuesList().size() == 0) {
-                int index = lstAttachments.locationToIndex(evt.getPoint());
-                if (index >= 0) {
-                    Object o = lstAttachments.getModel().getElementAt(index);
-                    this.lstAttachments.setSelectedValue(o, true);
-                }
-
-            }
-            this.popAttachments.show(evt.getComponent(), evt.getX(), evt.getY());
-        }
+        attachmentsMouseReleased(evt, lstAttachments);
     }//GEN-LAST:event_lstAttachmentsMouseReleased
 
     private void lstAttachmentsMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lstAttachmentsMouseClicked
-        if (evt.getClickCount() == 2 && this.lstAttachments.getSelectedValue() != null) {
-            try {
-                byte[] data = ((Attachment) this.lstAttachments.getSelectedValue()).getContent();
-                String fileName = ((Attachment) this.lstAttachments.getSelectedValue()).getFileName();
-                //String tmpFile = FileUtils.createTempFile(this.lstAttachments.getSelectedValue().toString(), data);
-                ReadOnlyDocumentStore store = new ReadOnlyDocumentStore("beaattachment-" + fileName, fileName);
-                Launcher launcher = LauncherFactory.getLauncher(fileName, data, store);
-                launcher.launch(false);
-            } catch (Exception ex) {
-                log.error("Error opening attachment", ex);
-                JOptionPane.showMessageDialog(this, "Fehler Öffnen des Anhangs: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-
-            }
-
-        }
+        attachmentsMouseClicked(evt, lstAttachments);
     }//GEN-LAST:event_lstAttachmentsMouseClicked
 
     private void lstAttachmentsMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lstAttachmentsMousePressed
@@ -1498,7 +1392,11 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
 
     private void mnuSaveAsFileActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_mnuSaveAsFileActionPerformed
 
-        if (this.lstAttachments.getSelectedValue() == null) {
+        JList attList=this.lstAttachments;
+        if(tabAttachments.getSelectedIndex()==1)
+            attList=this.lstAttachmentsTechnical;
+        
+        if (attList.getSelectedValue() == null) {
             return;
         }
 
@@ -1508,7 +1406,7 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                 userHome = userHome + File.separator;
             }
             String selectedFolder = null;
-            for (Object selected : this.lstAttachments.getSelectedValuesList()) {
+            for (Object selected : attList.getSelectedValuesList()) {
 
                 byte[] data = ((Attachment) selected).getContent();
 
@@ -1516,16 +1414,36 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                 if (selectedFolder != null) {
                     useFolder = selectedFolder;
                 }
-                JFileChooser chooser = new JFileChooser(useFolder);
-                chooser.setSelectedFile(new File(selected.toString()));
-                int result = chooser.showSaveDialog(this);
-                if (result == JFileChooser.CANCEL_OPTION) {
-                    continue;
-                }
 
-                File f = chooser.getSelectedFile();
-                if (f == null) {
-                    return;
+                boolean validName = false;
+                File f = null;
+                boolean skipToNext = false;
+                while (!validName) {
+                    JFileChooser chooser = new JFileChooser(useFolder);
+                    chooser.setSelectedFile(new File(selected.toString()));
+                    int result = chooser.showSaveDialog(this);
+                    if (result == JFileChooser.CANCEL_OPTION) {
+                        skipToNext = true;
+                        break;
+                    }
+
+                    f = chooser.getSelectedFile();
+                    if (f == null) {
+                        return;
+                    }
+
+                    if (f.exists()) {
+                        int response = JOptionPane.showConfirmDialog(this, "Die Datei existiert bereits. Überschreiben?", "Datei überschreiben", JOptionPane.YES_NO_OPTION);
+                        if (response == JOptionPane.YES_OPTION) {
+                            validName = true;
+                        }
+                    } else {
+                        validName = true;
+                    }
+
+                }
+                if (skipToNext) {
+                    continue;
                 }
 
                 if (!f.exists()) {
@@ -1533,31 +1451,42 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                 }
                 selectedFolder = f.getParentFile().getAbsolutePath();
 
-                FileOutputStream fOut = new FileOutputStream(f);
-                fOut.write(data);
-                fOut.close();
+                try ( FileOutputStream fOut = new FileOutputStream(f)) {
+                    fOut.write(data);
+                }
             }
 
         } catch (Exception ex) {
             log.error("Error saving attachment", ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Speichern des Anhangs: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Speichern des Anhangs: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
 
         }
     }//GEN-LAST:event_mnuSaveAsFileActionPerformed
 
     private void mnuSearchSaveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_mnuSearchSaveActionPerformed
 
-        if (this.lstAttachments.getSelectedValue() == null) {
+        JList attList=this.lstAttachments;
+        if(tabAttachments.getSelectedIndex()==1)
+            attList=this.lstAttachmentsTechnical;
+        
+        if (attList.getSelectedValue() == null) {
             return;
         }
 
-        String searchContext = null;
-        if (this.msgContainer != null) {
-            searchContext = "" + msgContainer.getReferenceJustice() + msgContainer.getReferenceNumber() + msgContainer.getSubject() + msgContainer.getBody();
+        String searchContext="";
+        if(this.caseContext!=null) {
+            searchContext=this.caseContext.getFileNumber();
+        } else {
+            if (this.msgContainer != null) {
+                searchContext = msgContainer.getReferenceJustice() + msgContainer.getReferenceNumber() + msgContainer.getSubject() + msgContainer.getBody();
+            }
         }
-        SearchAndAssignDialog dlg = new SearchAndAssignDialog(EditorsRegistry.getInstance().getMainWindow(), true, searchContext);
+        
+        
+        SearchAndAssignDialog dlg = new SearchAndAssignDialog(EditorsRegistry.getInstance().getMainWindow(), true, searchContext, null);
         dlg.setVisible(true);
-        ArchiveFileBean sel = dlg.getSelection();
+        ArchiveFileBean sel = dlg.getCaseSelection();
+        CaseFolder folder = dlg.getFolderSelection();
 
         dlg.dispose();
 
@@ -1568,7 +1497,7 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                 JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
                 ArchiveFileServiceRemote afs = locator.lookupArchiveFileServiceRemote();
 
-                for (Object selected : this.lstAttachments.getSelectedValuesList()) {
+                for (Object selected : attList.getSelectedValuesList()) {
 
                     byte[] data = ((Attachment) selected).getContent();
 
@@ -1579,6 +1508,15 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
 
                     ArchiveFileDocumentsBean newDoc = afs.addDocument(sel.getId(), newName, data, "");
 
+                    if (folder != null) {
+                        ArrayList<String> docList = new ArrayList<>();
+                        docList.add(newDoc.getId());
+                        afs.moveDocumentsToFolder(docList, folder.getId());
+                    }
+
+                    if (folder != null) {
+                        newDoc.setFolder(folder);
+                    }
                     EventBroker eb = EventBroker.getInstance();
                     eb.publishEvent(new DocumentAddedEvent(newDoc));
 
@@ -1586,7 +1524,7 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
 
             } catch (Exception ex) {
                 log.error(ex);
-                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Speichern des Dokuments: " + ex.getMessage(), "Fehler");
+                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Speichern des Dokuments: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
             }
         }
     }//GEN-LAST:event_mnuSearchSaveActionPerformed
@@ -1609,7 +1547,7 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                 BeaLoginDialog loginPanel = new BeaLoginDialog(EditorsRegistry.getInstance().getMainWindow(), true, callback);
                 loginPanel.setVisible(true);
                 if (!BeaAccess.hasInstance()) {
-                    ThreadUtils.showErrorDialog(this, "beA-Login fehlgeschlagen", "Fehler");
+                    ThreadUtils.showErrorDialog(this, "beA-Login fehlgeschlagen", com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
                     return;
                 }
             }
@@ -1617,20 +1555,20 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
             ArrayList<MessageJournalEntry> journal = bea.getMessageJournal(this.msgContainer.getId());
             this.msgContainer.setJournal(journal);
             if (this.documentId != null) {
+                BeaAccess.addSignatureVerification(bea, msgContainer);
                 MessageExport mex = BeaAccess.exportMessage(msgContainer);
                 try {
                     JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(ClientSettings.getInstance().getLookupProperties());
                     locator.lookupArchiveFileServiceRemote().setDocumentContent(this.documentId, mex.getContent());
-                    //tmpUrl = appLauncher.createTempFile(value.getName(), content);
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, "Fehler beim Speichern der beA-Nachricht: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Fehler beim Speichern der beA-Nachricht: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                     return;
                 }
             }
             this.setMessage(this.msgContainer, this.documentId);
 
         } catch (Throwable t) {
-            ThreadUtils.showErrorDialog(this, "Fehler beim Laden des Journals: " + t.getMessage(), "Fehler");
+            ThreadUtils.showErrorDialog(this, "Fehler beim Laden des Journals: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
         }
     }//GEN-LAST:event_cmdRefreshJournalActionPerformed
 
@@ -1648,39 +1586,34 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
                 BeaLoginDialog loginPanel = new BeaLoginDialog(EditorsRegistry.getInstance().getMainWindow(), true, callback);
                 loginPanel.setVisible(true);
                 if (!BeaAccess.hasInstance()) {
-                    ThreadUtils.showErrorDialog(this, "beA-Login fehlgeschlagen", "Fehler");
+                    ThreadUtils.showErrorDialog(this, "beA-Login fehlgeschlagen", com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
                     return;
                 }
             }
-            BeaAccess bea = BeaAccess.getInstance();
-            Collection<PostBox> inboxes = BeaAccess.getInstance().getPostBoxes();
-            for (PostBox pb : inboxes) {
-                if (msgContainer.getSenderSafeId().equals(pb.getSafeId())) {
-                    ProcessCard pc = BeaAccess.getInstance().getProcessCards(msgContainer.getSenderSafeId(), Long.parseLong(msgContainer.getId()));
-                    // only replace if not empty! process cards cannot be downloaded after the message has been moved to the SENT folder
-                    if (pc != null) {
-                        if (pc.getEntries().size() > 0) {
-                            msgContainer.setProcessCard(pc);
-                        }
-                    }
-
+            
+            ProcessCard pc = BeaAccess.getInstance().getProcessCards(Long.parseLong(msgContainer.getId()));
+            // only replace if not empty! process cards cannot be downloaded after the message has been moved to the SENT folder
+            if (pc != null) {
+                if (pc.getEntries().size() > 0) {
+                    msgContainer.setProcessCard(pc);
                 }
             }
+
             if (this.documentId != null) {
+                BeaAccess.addSignatureVerification(BeaAccess.getInstance(), msgContainer);
                 MessageExport mex = BeaAccess.exportMessage(msgContainer);
                 try {
                     JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(ClientSettings.getInstance().getLookupProperties());
                     locator.lookupArchiveFileServiceRemote().setDocumentContent(this.documentId, mex.getContent());
-                    //tmpUrl = appLauncher.createTempFile(value.getName(), content);
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, "Fehler beim Speichern der beA-Nachricht: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Fehler beim Speichern der beA-Nachricht: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                     return;
                 }
             }
             this.setMessage(this.msgContainer, this.documentId);
 
         } catch (Throwable t) {
-            ThreadUtils.showErrorDialog(this, "Fehler beim Laden des Journals: " + t.getMessage(), "Fehler");
+            ThreadUtils.showErrorDialog(this, "Fehler beim Laden des Journals: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
         }
     }//GEN-LAST:event_cmdRefreshProcessCardActionPerformed
 
@@ -1695,30 +1628,118 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
         if (this.msgContainer != null) {
             try {
                 byte[] pdf = this.msgContainer.toPdf("j-lawyer.org " + VersionUtils.getFullClientVersion());
-                String fileName="beA-Nachricht-"+this.msgContainer.getId() + ".pdf";
+                String fileName = "beA-Nachricht-" + this.msgContainer.getId() + ".pdf";
                 ReadOnlyDocumentStore store = new ReadOnlyDocumentStore("beacontentui-" + fileName, fileName);
-                Launcher launcher = LauncherFactory.getLauncher(fileName, pdf, store);
+                Launcher launcher = LauncherFactory.getLauncher(fileName, pdf, store, EditorsRegistry.getInstance().getMainWindow());
                 launcher.launch(false);
 
             } catch (Exception ex) {
                 log.error("Could not generate PDF for beA message", ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Erstellen des PDF: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Fehler beim Erstellen des PDF: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             }
         }
     }//GEN-LAST:event_cmdToPdfActionPerformed
 
+    private void cmdVerifySignaturesActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdVerifySignaturesActionPerformed
+        if (this.msgContainer == null) {
+            return;
+        }
+
+        try {
+
+            String vHtml = "";
+            String vStatus = VerificationResult.STATUS_FAILED;
+            if (StringUtils.isEmpty(this.msgContainer.getVerificationHtml()) || StringUtils.isEmpty(this.msgContainer.getVerificationStatus())) {
+
+                if (!BeaAccess.hasInstance()) {
+                    BeaLoginCallback callback = null;
+                    try {
+                        callback = (BeaLoginCallback) EditorsRegistry.getInstance().getEditor(BeaInboxPanel.class.getName());
+                    } catch (Throwable t) {
+                        log.error(t);
+                    }
+
+                    BeaLoginDialog loginPanel = new BeaLoginDialog(EditorsRegistry.getInstance().getMainWindow(), true, callback);
+                    loginPanel.setVisible(true);
+                    if (!BeaAccess.hasInstance()) {
+                        ThreadUtils.showErrorDialog(this, "beA-Login fehlgeschlagen", com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
+                        return;
+                    }
+                }
+                BeaAccess bea = BeaAccess.getInstance();
+                VerificationResult vr = bea.verifyMessage(this.msgContainer.getId());
+                vHtml=vr.getHtml();
+                vStatus=vr.getStatus();
+            } else {
+                vHtml=this.msgContainer.getVerificationHtml();
+                vStatus=this.msgContainer.getVerificationStatus();
+            }
+
+            BeaSignaturesVerificationDialog dlg = new BeaSignaturesVerificationDialog(EditorsRegistry.getInstance().getMainWindow(), true);
+            dlg.setHtml(vHtml);
+            dlg.setStatus(vStatus);
+            FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
+            dlg.setVisible(true);
+
+        } catch (Throwable t) {
+            ThreadUtils.showErrorDialog(this, "Fehler bei der Signaturprüfung: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
+        }
+    }//GEN-LAST:event_cmdVerifySignaturesActionPerformed
+
+    private void lstAttachmentsTechnicalMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lstAttachmentsTechnicalMouseClicked
+        attachmentsMouseClicked(evt, lstAttachmentsTechnical);
+    }//GEN-LAST:event_lstAttachmentsTechnicalMouseClicked
+
+    private void lstAttachmentsTechnicalMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lstAttachmentsTechnicalMousePressed
+        this.lstAttachmentsTechnicalMouseReleased(evt);
+    }//GEN-LAST:event_lstAttachmentsTechnicalMousePressed
+
+    private void lstAttachmentsTechnicalMouseReleased(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lstAttachmentsTechnicalMouseReleased
+        attachmentsMouseReleased(evt, lstAttachmentsTechnical);
+    }//GEN-LAST:event_lstAttachmentsTechnicalMouseReleased
+
+    private void attachmentsMouseReleased(java.awt.event.MouseEvent evt, JList attList) {
+        if (evt.isPopupTrigger() && evt.getComponent().isEnabled()) {
+
+            if (attList.getSelectedValuesList().isEmpty()) {
+                int index = attList.locationToIndex(evt.getPoint());
+                if (index >= 0) {
+                    Object o = attList.getModel().getElementAt(index);
+                    attList.setSelectedValue(o, true);
+                }
+
+            }
+            this.popAttachments.show(evt.getComponent(), evt.getX(), evt.getY());
+        }
+    }
+    
+    private void attachmentsMouseClicked(java.awt.event.MouseEvent evt, JList attList) {
+        if (evt.getClickCount() == 2 && attList.getSelectedValue() != null) {
+            try {
+                byte[] data = ((Attachment) attList.getSelectedValue()).getContent();
+                String fileName = ((Attachment) attList.getSelectedValue()).getFileName();
+                ReadOnlyDocumentStore store = new ReadOnlyDocumentStore("beaattachment-" + fileName, fileName);
+                Launcher launcher = LauncherFactory.getLauncher(fileName, data, store, EditorsRegistry.getInstance().getMainWindow());
+                launcher.launch(false);
+            } catch (Exception ex) {
+                log.error("Error opening attachment", ex);
+                JOptionPane.showMessageDialog(this, "Fehler Öffnen des Anhangs: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+
+            }
+
+        }
+    }
+    
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton cmdRefreshJournal;
     private javax.swing.JButton cmdRefreshProcessCard;
     private javax.swing.JButton cmdShowProcessCard;
     private javax.swing.JButton cmdToPdf;
+    private javax.swing.JButton cmdVerifySignatures;
     private javax.swing.JEditorPane editBody;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
-    private javax.swing.JLabel jLabel4;
-    private javax.swing.JLabel jLabel6;
-    private javax.swing.JLabel jLabel7;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JPanel jPanel3;
@@ -1728,20 +1749,25 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
     private javax.swing.JScrollPane jScrollPane2;
     private javax.swing.JScrollPane jScrollPane3;
     private javax.swing.JScrollPane jScrollPane4;
+    private javax.swing.JScrollPane jScrollPane5;
+    private javax.swing.JSeparator jSeparator1;
     private javax.swing.JSplitPane jSplitPane1;
     private javax.swing.JTabbedPane jTabbedPane1;
     private javax.swing.JLabel lblCaseNumber;
     private javax.swing.JLabel lblEeb;
     private javax.swing.JLabel lblFrom;
     private javax.swing.JLabel lblReferenceJustice;
+    private javax.swing.JLabel lblSendStatus;
     private javax.swing.JLabel lblSentDate;
     private javax.swing.JLabel lblSubject;
     private javax.swing.JLabel lblTo;
     private javax.swing.JList lstAttachments;
+    private javax.swing.JList<String> lstAttachmentsTechnical;
     private javax.swing.JMenu mnuSave;
     private javax.swing.JMenuItem mnuSaveAsFile;
     private javax.swing.JMenuItem mnuSearchSave;
     private javax.swing.JPopupMenu popAttachments;
+    private javax.swing.JTabbedPane tabAttachments;
     private javax.swing.JTable tblJournal;
     private javax.swing.JTable tblProcessCard;
     // End of variables declaration//GEN-END:variables
@@ -1755,7 +1781,7 @@ public class BeaMessageContentUI extends javax.swing.JPanel implements Hyperlink
 
             String url = he.getURL().toString();
             if (url.toLowerCase().startsWith("mailto:")) {
-                SendEmailDialog dlg = new SendEmailDialog(EditorsRegistry.getInstance().getMainWindow(), false);
+                SendEmailDialog dlg = new SendEmailDialog(false, EditorsRegistry.getInstance().getMainWindow(), false);
                 FrameUtils.centerDialog(dlg, null);
                 if (url.length() > 7) {
                     url = url.substring(7);

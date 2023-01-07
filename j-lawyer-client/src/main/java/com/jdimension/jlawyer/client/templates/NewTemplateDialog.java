@@ -685,6 +685,10 @@ public class NewTemplateDialog extends javax.swing.JDialog {
     
     /**
      * Creates new form BankSearchDialog
+     * @param parent
+     * @param modal
+     * @param folder
+     * @param newName
      */
     public NewTemplateDialog(java.awt.Frame parent, boolean modal, GenericNode folder, String newName) {
         super(parent, modal);
@@ -702,7 +706,7 @@ public class NewTemplateDialog extends javax.swing.JDialog {
             
         } catch (Exception ex) {
             log.error(ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Laden der Vorlagen: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden der Vorlagen: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
 
         }
 
@@ -711,7 +715,7 @@ public class NewTemplateDialog extends javax.swing.JDialog {
                 this.cmbTemplates.addItem(o);
             }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Fehler beim Laden der Vorlagen: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden der Vorlagen: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
 
         }
         
@@ -831,7 +835,6 @@ public class NewTemplateDialog extends javax.swing.JDialog {
 
     private void cmdCreateFromTemplateActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdCreateFromTemplateActionPerformed
         String fileName = this.txtFileName.getText();
-        fileName = fileName.replaceAll(" ", "-");
         
         if(this.cmbTemplates.getSelectedItem().toString().toLowerCase().endsWith(".odt")) {
             fileName = fileName + ".odt";
@@ -852,12 +855,11 @@ public class NewTemplateDialog extends javax.swing.JDialog {
 
 
         ClientSettings settings = ClientSettings.getInstance();
-        //EditorsRegistry.getInstance().updateStatus("Adresse wird gespeichert...");
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
             locator.lookupSystemManagementRemote().addTemplateFromTemplate(folder,fileName, this.cmbTemplates.getSelectedItem().toString());
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Fehler beim Erstellen des Dokuments: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Erstellen des Dokuments: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
         EditorsRegistry.getInstance().clearStatus();
@@ -869,11 +871,8 @@ public class NewTemplateDialog extends javax.swing.JDialog {
      * @param args the command line arguments
      */
     public static void main(String args[]) {
-        java.awt.EventQueue.invokeLater(new Runnable() {
-
-            public void run() {
-                new NewTemplateDialog(new javax.swing.JFrame(), true, null,"").setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            new NewTemplateDialog(new javax.swing.JFrame(), true, null,"").setVisible(true);
         });
     }
     // Variables declaration - do not modify//GEN-BEGIN:variables

@@ -665,7 +665,6 @@ package com.jdimension.jlawyer.documents;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -762,11 +761,17 @@ public class PlaceHolders {
     public static final String AKTE_GEGENSTANDSWERT = "{{AKTE_GEGENSTANDSWERT}}";
     public static final String AKTE_WEGEN = "{{AKTE_WEGEN}}";
     public static final String AKTE_ANWALT = "{{AKTE_ANWALT}}";
+    // Anzeigename
+    public static final String AKTE_ANWALT_AN = "{{AKTE_ANWALT_AN}}";
     public static final String AKTE_SACHBEARBEITER = "{{AKTE_SACHBEARBEITER}}";
+    // Anzeigename
+    public static final String AKTE_SACHBEARBEITER_AN = "{{AKTE_SACHBEARBEITER_AN}}";
     public static final String DOK_DZ = "{{DOK_DZ}}";
     public static final String AKTE_EIGENE1 = "{{AKTE_EIGENE1}}";
     public static final String AKTE_EIGENE2 = "{{AKTE_EIGENE2}}";
     public static final String AKTE_EIGENE3 = "{{AKTE_EIGENE3}}";
+    
+    public static final String AUTOR_AN = "{{AUTOR_AN}}";
 
     public static final String TABELLE_1 = "{{TABELLE_1}}";
 
@@ -776,13 +781,27 @@ public class PlaceHolders {
         ALLTABLEPLACEHOLDERS.add(TABELLE_1);
     }
     
+    public static String insertAt(String origin, String insert, int position) {
+        String origin1 = origin.substring(0, position);
+        String origin2 = origin.substring(position, origin.length());
+        return origin1 + insert + origin2;
+
+    }
+    
+    protected static String val(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s;
+    }
+    
     public static String getPlaceHolderForType(String genericPlaceHolder, String typeSpecificPrefix) {
         return genericPlaceHolder.replaceAll("###", typeSpecificPrefix);
     }
 
     public static ArrayList<String> getAllPlaceHolders(List<String> allPartyTypesPlaceHolders, Collection<String> formsPlaceHolders) {
         
-        ArrayList<String> ALLPLACEHOLDERS = new ArrayList<String>();
+        ArrayList<String> ALLPLACEHOLDERS = new ArrayList<>();
         
         ALLPLACEHOLDERS.addAll(formsPlaceHolders);
 
@@ -873,16 +892,18 @@ public class PlaceHolders {
         ALLPLACEHOLDERS.add(AKTE_ZEICHEN);
         ALLPLACEHOLDERS.add(AKTE_KURZRUBRUM);
         ALLPLACEHOLDERS.add(AKTE_NOTIZ);
-        //ALLPLACEHOLDERS.add(AKTE_ERSTELLDATUM);
-//        ALLPLACEHOLDERS.add(AKTE_DIKTATZEICHEN);
         ALLPLACEHOLDERS.add(AKTE_SCHADENNR);
         ALLPLACEHOLDERS.add(AKTE_GEGENSTANDSWERT);
         ALLPLACEHOLDERS.add(AKTE_WEGEN);
         ALLPLACEHOLDERS.add(AKTE_ANWALT);
         ALLPLACEHOLDERS.add(AKTE_SACHBEARBEITER);
+        ALLPLACEHOLDERS.add(AKTE_ANWALT_AN);
+        ALLPLACEHOLDERS.add(AKTE_SACHBEARBEITER_AN);
         ALLPLACEHOLDERS.add(AKTE_EIGENE1);
         ALLPLACEHOLDERS.add(AKTE_EIGENE2);
         ALLPLACEHOLDERS.add(AKTE_EIGENE3);
+        
+        ALLPLACEHOLDERS.add(AUTOR_AN);
 
         ALLPLACEHOLDERS.add(DOK_DZ);
 

@@ -673,10 +673,11 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import javax.mail.Address;
+import javax.mail.FetchProfile;
 import javax.mail.Flags;
 import javax.mail.Folder;
 import javax.mail.Message;
-import javax.mail.internet.MimeUtility;
+import javax.mail.search.FlagTerm;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
@@ -689,10 +690,8 @@ import org.apache.log4j.Logger;
 public class LoadFolderAction extends ProgressableAction {
 
     private static final Logger log = Logger.getLogger(LoadFolderAction.class.getName());
-    private static SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy, HH:mm");
-    
-    private static ArrayList DOWNLOAD_RESTRICTIONS=new ArrayList() {};
-    
+    private final SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy, HH:mm");
+
     private Folder f = null;
     private JTable table = null;
     private int sortCol = -1;
@@ -724,49 +723,61 @@ public class LoadFolderAction extends ProgressableAction {
     @Override
     public boolean execute() throws Exception {
         try {
-
             EditorsRegistry.getInstance().updateStatus("Öffne Ordner " + f.getName(), true);
 
             if (!(f.isOpen())) {
                 f.open(Folder.READ_WRITE);
             }
             try {
-            if(EmailUtils.isIMAP(f))
-                f.expunge();
+                if (EmailUtils.isIMAP(f)) {
+                    f.expunge();
+                }
             } catch (Throwable t) {
                 log.error("Could not expunge folder", t);
             }
 
-            
-            ClientSettings cs=ClientSettings.getInstance();
-            String restriction=cs.getConfiguration(ClientSettings.CONF_MAIL_DOWNLOADRESTRICTION, ""+LoadFolderRestriction.RESTRICTION_50);
-            LoadFolderRestriction currentRestriction=null;
+            ClientSettings cs = ClientSettings.getInstance();
+            String restriction = cs.getConfiguration(ClientSettings.CONF_MAIL_DOWNLOADRESTRICTION, "" + LoadFolderRestriction.RESTRICTION_50);
+            LoadFolderRestriction currentRestriction = null;
             try {
-                int restr=Integer.parseInt(restriction);
-                currentRestriction=new LoadFolderRestriction(restr);
+                int restr = Integer.parseInt(restriction);
+                currentRestriction = new LoadFolderRestriction(restr);
             } catch (Throwable t) {
-                currentRestriction=new LoadFolderRestriction(LoadFolderRestriction.RESTRICTION_50);
+                currentRestriction = new LoadFolderRestriction(LoadFolderRestriction.RESTRICTION_50);
+            }
+
+            int fromIndex = 1;
+            int toIndex = f.getMessageCount();
+            switch (currentRestriction.getRestriction()) {
+                case LoadFolderRestriction.RESTRICTION_20:
+                    fromIndex = Math.max(1, toIndex - 20);
+                    break;
+                case LoadFolderRestriction.RESTRICTION_50:
+                    fromIndex = Math.max(1, toIndex - 50);
+                    break;
+                case LoadFolderRestriction.RESTRICTION_100:
+                    fromIndex = Math.max(1, toIndex - 100);
+                    break;
+                case LoadFolderRestriction.RESTRICTION_500:
+                    fromIndex = Math.max(1, toIndex - 500);
+                    break;
+                default:
+                    break;
+            }
+
+            Message[] messages = f.getMessages(fromIndex, toIndex);
+            if (currentRestriction.getRestriction() == LoadFolderRestriction.RESTRICTION_UNREAD) {
+                messages=f.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false), messages);
             }
             
-            
-            int fromIndex=1;
-            int toIndex=f.getMessageCount();
-            if(currentRestriction.getRestriction()==LoadFolderRestriction.RESTRICTION_20) {
-                    fromIndex=Math.max(1, toIndex-20);
-                }
-                if(currentRestriction.getRestriction()==LoadFolderRestriction.RESTRICTION_50) {
-                    fromIndex=Math.max(1, toIndex-50);
-                }
-                if(currentRestriction.getRestriction()==LoadFolderRestriction.RESTRICTION_100) {
-                    fromIndex=Math.max(1, toIndex-100);
-                }
-                if(currentRestriction.getRestriction()==LoadFolderRestriction.RESTRICTION_500) {
-                    fromIndex=Math.max(1, toIndex-500);
-                }
-            
-            Message[] messages = f.getMessages(fromIndex, toIndex);
-            HashMap<String, String> decodedMap = new HashMap<String, String>();
+            FetchProfile fp = new FetchProfile();
+            fp.add(FetchProfile.Item.ENVELOPE);
+            fp.add(FetchProfile.Item.FLAGS);
+            f.fetch(messages, fp);
+
+            HashMap<String, String> decodedMap = new HashMap<>();
             final int indexMax = messages.length - 1;
+            ArrayList<Object[]> tableRows = new ArrayList<>();
             for (int i = 0; i < messages.length; i++) {
 
                 if (this.isCancelled()) {
@@ -778,24 +789,19 @@ public class LoadFolderAction extends ProgressableAction {
                     break;
                 }
 
-                // this.progress("Lade Nachrichten " + (i + 1) + "/" + this.getMax());
-                this.progress("Lade Nachrichten... " + (i + 1));
-
-                EditorsRegistry.getInstance().updateStatus("Lade Nachricht " + (i + 1), true);
-                //System.out.println("*****************************************************************************");
-                //System.out.println("MESSAGE " + (i + 1) + ":");
-                final Message msg = messages[i];
-                
-                if(msg.isSet(Flags.Flag.SEEN) && currentRestriction.getRestriction()==LoadFolderRestriction.RESTRICTION_UNREAD) {
-                    // only show unread mails
-                    continue;
+                if ((i % 100) == 0 || i == (messages.length - 1)) {
+                    this.progress("Lade Nachrichten... " + (i + 1));
+                    EditorsRegistry.getInstance().updateStatus("Lade Nachricht " + (i + 1), true);
                 }
-                
-                
-                
-                //System.out.println(msg.getMessageNumber());
-                //Object String;
-                //System.out.println(folder.getUID(msg)
+
+                final Message msg = messages[i];
+
+                if (currentRestriction.getRestriction() == LoadFolderRestriction.RESTRICTION_UNREAD) {
+                    if (msg.isSet(Flags.Flag.SEEN)) {
+                        // only show unread mails
+                        continue;
+                    }
+                }
 
                 if (msg.isExpunged()) {
                     continue;
@@ -805,17 +811,20 @@ public class LoadFolderAction extends ProgressableAction {
                     f.open(Folder.READ_WRITE);
                 }
 
-                String fromCheck="unbekannt";
-                if(msg.getFrom()!=null) {
-                    if(msg.getFrom().length>0) {
-                        fromCheck=msg.getFrom()[0].toString();
-                        try {
-                            fromCheck=MimeUtility.decodeText(fromCheck);
-                        } catch (Throwable t) {
-                            log.error("can not decode FROM header");
+                String fromCheck = "unbekannt";
+                Address[] froms = msg.getFrom();
+                if (froms != null) {
+                    if (froms.length > 0) {
+                        fromCheck = froms[0].toString();
+                        String fromKey = fromCheck;
+                        if (decodedMap.containsKey(fromKey)) {
+                            fromCheck = decodedMap.get(fromKey);
+                        } else {
+                            fromCheck = EmailUtils.decodeText(fromKey);
+                            decodedMap.put(fromKey, fromCheck);
                         }
                     }
-                    
+
                 }
                 final String from = fromCheck;
                 Address[] to = msg.getRecipients(Message.RecipientType.TO);
@@ -833,18 +842,25 @@ public class LoadFolderAction extends ProgressableAction {
                     }
                 }
 
-//                final String subject=MimeUtility.decodeText(msg.getFrom()[0].toString());
-                final String toString2 = toString;
-                final int currentIndex = i;
+                String sentString="";
+                if(msg.getSentDate()!=null) {
+                    sentString=df.format(msg.getSentDate());
+                }
+                Object[] newRow = new Object[]{new MessageContainer(msg, msg.getSubject(), msg.isSet(Flags.Flag.SEEN)), from, toString, sentString};
+                tableRows.add(newRow);
 
-                SwingUtilities.invokeLater(new Thread(new Runnable() {
+                if (((i % 100) == 0 && i > 0) || i == (messages.length - 1)) {
 
-                    public void run() {
+                    final int currentIndex = i;
+                    final ArrayList<Object[]> tableRowsClone = (ArrayList<Object[]>) tableRows.clone();
+                    tableRows.clear();
+
+                    SwingUtilities.invokeLater(() -> {
                         try {
-//                            if (!(msg.getFolder().isOpen())) {
-//                                msg.getFolder().open(Folder.READ_WRITE);
-//                            }
-                            ((DefaultTableModel) table.getModel()).addRow(new Object[]{new MessageContainer(msg, msg.getSubject(), msg.isSet(Flags.Flag.SEEN)), from, toString2, df.format(msg.getSentDate())});
+                            for (Object[] rowObject : tableRowsClone) {
+                                ((DefaultTableModel) table.getModel()).addRow(rowObject);
+                                
+                            }
                             if (scrollToRow > 0) {
                                 if (currentIndex == (indexMax)) {
                                     if (table.getRowCount() > scrollToRow) {
@@ -855,25 +871,17 @@ public class LoadFolderAction extends ProgressableAction {
                         } catch (Throwable t) {
                             log.error(t);
                         }
-                    }
-                }));
-                try {
-                if(i==(messages.length-1) || i==(messages.length/2))
-                    ComponentUtils.autoSizeColumns(table);
-                } catch (Throwable t) {
-                    log.error(t);
+                    });
+
                 }
-                
-                if(i==20 && currentRestriction.getRestriction()==LoadFolderRestriction.RESTRICTION_20) {
+
+                if (i == 20 && currentRestriction.getRestriction() == LoadFolderRestriction.RESTRICTION_20) {
                     break;
-                }
-                if(i==50 && currentRestriction.getRestriction()==LoadFolderRestriction.RESTRICTION_50) {
+                } else if (i == 50 && currentRestriction.getRestriction() == LoadFolderRestriction.RESTRICTION_50) {
                     break;
-                }
-                if(i==100 && currentRestriction.getRestriction()==LoadFolderRestriction.RESTRICTION_100) {
+                } else if (i == 100 && currentRestriction.getRestriction() == LoadFolderRestriction.RESTRICTION_100) {
                     break;
-                }
-                if(i==500 && currentRestriction.getRestriction()==LoadFolderRestriction.RESTRICTION_500) {
+                } else if (i == 500 && currentRestriction.getRestriction() == LoadFolderRestriction.RESTRICTION_500) {
                     break;
                 }
             }
@@ -884,36 +892,26 @@ public class LoadFolderAction extends ProgressableAction {
             } catch (Throwable t) {
                 log.error("Error sorting mails", t);
             }
-            
-            SwingUtilities.invokeLater(new Thread(new Runnable() {
 
-                    public void run() {
-                        ComponentUtils.autoSizeColumns(table);
-                    }
-            }));
+            SwingUtilities.invokeLater(() -> {
+                ComponentUtils.autoSizeColumns(table);
+            });
 
-            //ComponentUtils.autoSizeColumns(table);
             EditorsRegistry.getInstance().clearStatus(true);
 
-            new Thread(new Runnable() {
-
-                public void run() {
-                    try {
-                        Thread.sleep(5000);
-                        if (f.isOpen()) {
-                            EmailUtils.closeIfIMAP(f);
-                        }
-                        //f.close(true);
-                    } catch (Throwable t) {
-                        log.error(t);
+            new Thread(() -> {
+                try {
+                    Thread.sleep(5000);
+                    if (f.isOpen()) {
+                        EmailUtils.closeIfIMAP(f);
                     }
+                } catch (Throwable t) {
+                    log.error(t);
                 }
             }).start();
-            
 
         } catch (Throwable ex) {
             log.error(ex);
-            ex.printStackTrace();
             return false;
         }
         return true;

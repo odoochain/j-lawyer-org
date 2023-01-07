@@ -665,6 +665,7 @@ package com.jdimension.jlawyer.services;
 
 import com.jdimension.jlawyer.fax.BalanceInformation;
 import com.jdimension.jlawyer.fax.SipUri;
+import com.jdimension.jlawyer.fax.SipUser;
 import com.jdimension.jlawyer.fax.SipgateException;
 import com.jdimension.jlawyer.persistence.FaxQueueBean;
 import java.util.ArrayList;
@@ -682,20 +683,24 @@ public interface VoipServiceRemote {
 
     ArrayList<SipUri> getOwnUris() throws SipgateException;
 
-    String initiateSms(String localUri, String remoteUri, String content) throws SipgateException;
+    void initiateSms(String localUri, String remoteUri, String content) throws SipgateException;
 
-    String initiateCall(String localUri, String remoteUri) throws SipgateException;
+    String initiateCall(String localUri, String remoteUri, String callerId) throws SipgateException;
 
     String initiateFax(String localUri, String remoteUri, String remoteName, String pdfName, byte[] pdfData, String archiveFileId) throws SipgateException;
 
     ArrayList<FaxQueueBean> queueList() throws Exception;
 
-    String getSessionStatus(String sessionId) throws SipgateException;
+    String getSessionStatus(String sessionId, String senderPrincipalId) throws SipgateException;
 
     void deleteQueueEntries(List<String> sessionIds) throws SipgateException;
 
     String reInitiateFax(String id) throws SipgateException;
 
-    void saveFaxReport(String sessionId) throws SipgateException;
+    void saveFaxReport(String sessionId, String fileName) throws SipgateException;
+
+    List<SipUser> getUsers(String user, String password) throws SipgateException;
+
+    String getNewFaxReportFileName(String sessionId) throws Exception;
     
 }

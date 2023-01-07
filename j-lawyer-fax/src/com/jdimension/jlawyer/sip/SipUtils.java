@@ -677,6 +677,16 @@ public class SipUtils {
     public static final int STATUSLEVEL_ERROR=30;
     public static final int STATUSLEVEL_SUCCESS=10;
     
+    public static final String API_STATUS_PENDING="PENDING";
+    public static final String API_STATUS_SENDING="SENDING";
+    public static final String API_STATUS_FAILED="FAILED";
+    public static final String API_STATUS_SENT="SENT";
+    public static final String API_STATUS_SCHEDULED="SCHEDULED";
+    
+    public static String E164NumberWithPlusSign(String phone) {
+        return "+" + E164Number(phone);
+    }
+    
     public static String E164Number(String phone) {
         phone=phone.replaceAll("\\s", "");
         phone=phone.replaceAll("-", "");
@@ -694,6 +704,8 @@ public class SipUtils {
             // für alle: evtl. existierende ortsvorwahl-null entfernen, länderkennzeichen vorn ansetzen
         } else if (phone.startsWith("+31")) {
             phone=normCountry(phone, "+31", "31");
+        } else if (phone.startsWith("+33")) {
+            phone=normCountry(phone, "+33", "33");
         } else if (phone.startsWith("+34")) {
             phone=normCountry(phone, "+34", "34");
         } else if (phone.startsWith("+39")) {
@@ -720,6 +732,8 @@ public class SipUtils {
             phone=normCountry(phone, "001", "1");
         } else if (phone.startsWith("0031")) {
             phone=normCountry(phone, "0031", "31");
+        } else if (phone.startsWith("0033")) {
+            phone=normCountry(phone, "0033", "33");
         } else if (phone.startsWith("0034")) {
             phone=normCountry(phone, "0034", "34");
         } else if (phone.startsWith("0039")) {
@@ -774,15 +788,11 @@ public class SipUtils {
         if(status==null)
             return false;
         
-        if("sent".equalsIgnoreCase(status))
+        if(API_STATUS_SENT.equalsIgnoreCase(status))
             return true;
         
-        if("failed".equalsIgnoreCase(status))
-            return true;
-        
-        if("error during submit".equalsIgnoreCase(status))
-            return true;
-        
+        if(API_STATUS_FAILED.equalsIgnoreCase(status))
+            return true;       
         
         return false;
         
@@ -795,50 +805,46 @@ public class SipUtils {
         if(status==null)
             return false;
         
-        if("failed".equalsIgnoreCase(status))
-            return true;
-        
-        if("error during submit".equalsIgnoreCase(status))
-            return true;
-        
+        if(API_STATUS_FAILED.equalsIgnoreCase(status))
+            return true;        
         
         return false;
         
     }
     
     public static String getDisplayableStatus(String status) {
-        if("sending".equalsIgnoreCase(status))
+        if(API_STATUS_SENDING.equalsIgnoreCase(status))
             return "Wird gesendet...";
         
-        if("sent".equalsIgnoreCase(status))
+        if(API_STATUS_SENT.equalsIgnoreCase(status))
             return "Erfolgreich gesendet";
         
-        if("failed".equalsIgnoreCase(status))
+        if(API_STATUS_FAILED.equalsIgnoreCase(status))
             return "Fehlgeschlagen";
         
-        if("queued".equalsIgnoreCase(status))
-            return "In Warteschlange...";
+        if(API_STATUS_PENDING.equalsIgnoreCase(status))
+            return "In Vorbereitung...";
         
-        if("error during submit".equalsIgnoreCase(status))
-            return "Fehler bei der Übetragung";
+        if(API_STATUS_SCHEDULED.equalsIgnoreCase(status))
+            return "Für Versand eingeplant...";
         
         return status;
     }
     
     public static int getStatusLevel(String status) {
-        if("sending".equalsIgnoreCase(status))
+        if(API_STATUS_SENDING.equalsIgnoreCase(status))
             return SipUtils.STATUSLEVEL_INPROGRESS;
         
-        if("sent".equalsIgnoreCase(status))
+        if(API_STATUS_PENDING.equalsIgnoreCase(status))
+            return SipUtils.STATUSLEVEL_INPROGRESS;
+        
+        if(API_STATUS_SCHEDULED.equalsIgnoreCase(status))
+            return SipUtils.STATUSLEVEL_INPROGRESS;
+        
+        if(API_STATUS_SENT.equalsIgnoreCase(status))
             return SipUtils.STATUSLEVEL_SUCCESS;
         
-        if("failed".equalsIgnoreCase(status))
-            return SipUtils.STATUSLEVEL_ERROR;
-        
-        if("queued".equalsIgnoreCase(status))
-            return SipUtils.STATUSLEVEL_INPROGRESS;
-        
-        if("error during submit".equalsIgnoreCase(status))
+        if(API_STATUS_FAILED.equalsIgnoreCase(status))
             return SipUtils.STATUSLEVEL_ERROR;
         
         return SipUtils.STATUSLEVEL_SUCCESS;

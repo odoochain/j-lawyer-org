@@ -675,9 +675,10 @@ public class SipUri implements Serializable {
     private static final long serialVersionUID = 1L;
     
     private String uri=null;
-    private ArrayList<String> typeOfService=new ArrayList<String>();
+    private ArrayList<String> typeOfService=new ArrayList<>();
     private boolean defaultUri=false; 
     private String outgoingNumber=null;
+    protected String description=null;
     
     public SipUri() {
         
@@ -731,7 +732,11 @@ public class SipUri implements Serializable {
 
     @Override
     public String toString() {
-        return this.uri + " (" + this.outgoingNumber + ")";
+        if(this.outgoingNumber==null || this.outgoingNumber.isEmpty()) {
+            return this.description + " [" + this.uri + "]";
+        } else {
+            return this.description + " [" + this.uri + " / " + this.outgoingNumber + "]";
+        }
     }
 
     /**
@@ -746,6 +751,20 @@ public class SipUri implements Serializable {
      */
     public void setOutgoingNumber(String outgoingNumber) {
         this.outgoingNumber = outgoingNumber;
+    }
+
+    /**
+     * @return the description
+     */
+    public String getDescription() {
+        return description;
+    }
+
+    /**
+     * @param description the description to set
+     */
+    public void setDescription(String description) {
+        this.description = description;
     }
     
     

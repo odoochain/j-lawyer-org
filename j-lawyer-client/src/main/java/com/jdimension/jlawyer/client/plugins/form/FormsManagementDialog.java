@@ -677,11 +677,13 @@ import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.apache.log4j.Logger;
@@ -701,6 +703,8 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
 
     /**
      * Creates new form FormsManagementDialog
+     * @param parent
+     * @param modal
      */
     public FormsManagementDialog(java.awt.Frame parent, boolean modal) {
         super(parent, modal);
@@ -726,11 +730,11 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
             urlCon.setReadTimeout(5000);
 
             InputStream is = urlCon.getInputStream();
-            InputStreamReader reader = new InputStreamReader(is, "UTF-8");
+            InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
 
             char[] buffer = new char[1024];
             int len = 0;
-            StringBuffer sb = new StringBuffer();
+            StringBuilder sb = new StringBuilder();
             while ((len = reader.read(buffer)) > -1) {
                 sb.append(buffer, 0, len);
             }
@@ -739,14 +743,19 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
             String formsContent = sb.toString();
 
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            try {
+                dbf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+                dbf.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            } catch (IllegalArgumentException iae) {
+                // only available from JAXP 1.5+, but Wildfly still ships 1.4
+                log.warn("Unable to set external entity restrictions in XML parser", iae);
+            }
             DocumentBuilder remoteDb = dbf.newDocumentBuilder();
             InputSource inSrc1 = new InputSource(new StringReader(formsContent));
             inSrc1.setEncoding("UTF-8");
             Document remoteDoc = remoteDb.parse(inSrc1);
 
-            NodeList remoteList = remoteDoc.getElementsByTagName("forms");
-
-            remoteList = remoteDoc.getElementsByTagName("form");
+            NodeList remoteList = remoteDoc.getElementsByTagName("form");
 
             // load from server when not in cache or when version has been updated
             String formsDir = FormPluginUtil.getLocalDirectory();
@@ -755,12 +764,11 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
                 formDirFile.mkdirs();
             }
 
-            TreeMap<String, FormPluginEntryPanel> formPlugins = new TreeMap<String, FormPluginEntryPanel>();
+            TreeMap<String, FormPluginEntryPanel> formPlugins = new TreeMap<>();
             for (int i = 0; i < remoteList.getLength(); i++) {
                 Node n = remoteList.item(i);
                 String forVersion = n.getAttributes().getNamedItem("for").getNodeValue();
                 if (forVersion.contains(VersionUtils.getFullClientVersion())) {
-                    //remoteForms.add(n.getAttributes().getNamedItem("name").getNodeValue() + n.getAttributes().getNamedItem("version").getNodeValue());
                     FormPlugin fp = new FormPlugin();
                     fp.setForVersion(n.getAttributes().getNamedItem("for").getNodeValue());
                     fp.setId(n.getAttributes().getNamedItem("id").getNodeValue());
@@ -780,8 +788,21 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
                     for (String f : files.split(",")) {
                         fp.getFiles().add(f);
                     }
-                    //formPlugins.add(fp);
-                    FormPluginEntryPanel fpe = new FormPluginEntryPanel(fp, this.formPluginsPanel, this);
+                    if (n.getChildNodes() != null) {
+                        NodeList settingsList = n.getChildNodes();
+                        for (int s = 0; s < settingsList.getLength(); s++) {
+                            Node setting = settingsList.item(s);
+                            if ("setting".equalsIgnoreCase(setting.getNodeName())) {
+                                FormPluginSetting ps = new FormPluginSetting();
+                                ps.setKey(setting.getAttributes().getNamedItem("key").getNodeValue());
+                                ps.setCaption(setting.getAttributes().getNamedItem("caption").getNodeValue());
+                                ps.setDefaultValue(setting.getAttributes().getNamedItem("default").getNodeValue());
+                                ps.setOrder(Integer.parseInt(setting.getAttributes().getNamedItem("order").getNodeValue()));
+                                fp.getSettings().add(ps);
+                            }
+                        }
+                    }
+                    FormPluginEntryPanel fpe = new FormPluginEntryPanel(this, fp, this.formPluginsPanel, this);
 
                     FormTypeBean onServer = this.findPlugin(serverFormPlugins, fp.getId());
 
@@ -797,18 +818,16 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
                         }
                     }
                     formPlugins.put(fp.getName(), fpe);
-                    //this.formPluginsPanel.add(fpe);
                 }
             }
             Iterator i = formPlugins.entrySet().iterator();
             while (i.hasNext()) {
-                Map.Entry me=(Map.Entry)i.next();
-                this.formPluginsPanel.add((Component)me.getValue());
+                Map.Entry me = (Map.Entry) i.next();
+                this.formPluginsPanel.add((Component) me.getValue());
             }
 
         } catch (Throwable t) {
             log.error("Error downloading calculation plugins", t);
-            t.printStackTrace();
         }
 
         // check for local plugins
@@ -819,28 +838,31 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
                 return;
             }
 
-            InputStream is = new FileInputStream(internalXml);
-            InputStreamReader reader = new InputStreamReader(is, "UTF-8");
+            StringBuilder sb = new StringBuilder();
+            try ( InputStream is = new FileInputStream(internalXml);  InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8)) {
 
-            char[] buffer = new char[1024];
-            int len = 0;
-            StringBuffer sb = new StringBuffer();
-            while ((len = reader.read(buffer)) > -1) {
-                sb.append(buffer, 0, len);
+                char[] buffer = new char[1024];
+                int len = 0;
+                while ((len = reader.read(buffer)) > -1) {
+                    sb.append(buffer, 0, len);
+                }
             }
-            reader.close();
-            is.close();
             String formsContent = sb.toString();
 
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            try {
+                dbf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+                dbf.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            } catch (IllegalArgumentException iae) {
+                // only available from JAXP 1.5+, but Wildfly still ships 1.4
+                log.warn("Unable to set external entity restrictions in XML parser", iae);
+            }
             DocumentBuilder remoteDb = dbf.newDocumentBuilder();
             InputSource inSrc1 = new InputSource(new StringReader(formsContent));
             inSrc1.setEncoding("UTF-8");
             Document remoteDoc = remoteDb.parse(inSrc1);
 
-            NodeList remoteList = remoteDoc.getElementsByTagName("forms");
-
-            remoteList = remoteDoc.getElementsByTagName("form");
+            NodeList remoteList = remoteDoc.getElementsByTagName("form");
 
             // load from server when not in cache or when version has been updated
             String formsDir = FormPluginUtil.getLocalDirectory();
@@ -849,13 +871,10 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
                 formDirFile.mkdirs();
             }
 
-            ArrayList<String> remoteForms = new ArrayList<String>();
-            ArrayList<FormPlugin> formPlugins = new ArrayList<FormPlugin>();
             for (int i = 0; i < remoteList.getLength(); i++) {
                 Node n = remoteList.item(i);
                 String forVersion = n.getAttributes().getNamedItem("for").getNodeValue();
                 if (forVersion.contains(VersionUtils.getFullClientVersion())) {
-                    remoteForms.add(n.getAttributes().getNamedItem("name").getNodeValue() + n.getAttributes().getNamedItem("version").getNodeValue());
                     FormPlugin fp = new FormPlugin();
                     fp.setForVersion(n.getAttributes().getNamedItem("for").getNodeValue());
                     fp.setId(n.getAttributes().getNamedItem("id").getNodeValue());
@@ -875,8 +894,23 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
                     for (String f : files.split(",")) {
                         fp.getFiles().add(f);
                     }
-                    formPlugins.add(fp);
-                    FormPluginEntryPanel fpe = new FormPluginEntryPanel(fp, this.formPluginsPanel, this);
+
+                    if (n.getChildNodes() != null) {
+                        NodeList settingsList = n.getChildNodes();
+                        for (int s = 0; s < settingsList.getLength(); s++) {
+                            Node setting = settingsList.item(s);
+                            if ("setting".equalsIgnoreCase(setting.getNodeName())) {
+                                FormPluginSetting ps = new FormPluginSetting();
+                                ps.setKey(setting.getAttributes().getNamedItem("key").getNodeValue());
+                                ps.setCaption(setting.getAttributes().getNamedItem("caption").getNodeValue());
+                                ps.setDefaultValue(setting.getAttributes().getNamedItem("default").getNodeValue());
+                                ps.setOrder(Integer.parseInt(setting.getAttributes().getNamedItem("order").getNodeValue()));
+                                fp.getSettings().add(ps);
+                            }
+                        }
+                    }
+
+                    FormPluginEntryPanel fpe = new FormPluginEntryPanel(this, fp, this.formPluginsPanel, this);
 
                     FormTypeBean onServer = this.findPlugin(serverFormPlugins, fp.getId());
 
@@ -897,7 +931,6 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
 
         } catch (Throwable t) {
             log.error("Error downloading calculation plugins", t);
-            t.printStackTrace();
         }
 
     }
@@ -939,10 +972,10 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
 
         jScrollPane2.setViewportView(formPluginsPanel);
 
-        jLabel1.setFont(new java.awt.Font("Dialog", 0, 10)); // NOI18N
+        jLabel1.setFont(jLabel1.getFont().deriveFont(jLabel1.getFont().getStyle() & ~java.awt.Font.BOLD, jLabel1.getFont().getSize()-2));
         jLabel1.setText("Verbesserungsvorschläge / neue Falldatenblätter anfragen:");
 
-        lblGitHubLink.setFont(new java.awt.Font("Dialog", 1, 10)); // NOI18N
+        lblGitHubLink.setFont(lblGitHubLink.getFont().deriveFont(lblGitHubLink.getFont().getSize()-2f));
         lblGitHubLink.setText("https://github.com/jlawyerorg/j-lawyer-forms/issues");
         lblGitHubLink.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
         lblGitHubLink.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -1036,17 +1069,15 @@ public class FormsManagementDialog extends javax.swing.JDialog implements FormAc
         //</editor-fold>
 
         /* Create and display the dialog */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                FormsManagementDialog dialog = new FormsManagementDialog(new javax.swing.JFrame(), true);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            FormsManagementDialog dialog = new FormsManagementDialog(new javax.swing.JFrame(), true);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
 

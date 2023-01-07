@@ -663,6 +663,7 @@
  */
 package com.jdimension.jlawyer.client.voip;
 
+import com.jdimension.jlawyer.client.editors.EditorsRegistry;
 import com.jdimension.jlawyer.client.editors.StatusBarProvider;
 import com.jdimension.jlawyer.client.editors.ThemeableEditor;
 import com.jdimension.jlawyer.client.events.Event;
@@ -671,9 +672,10 @@ import com.jdimension.jlawyer.client.events.EventConsumer;
 import com.jdimension.jlawyer.client.events.FaxStatusEvent;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.client.utils.ComponentUtils;
+import com.jdimension.jlawyer.client.utils.FileUtils;
 import com.jdimension.jlawyer.client.utils.ThreadUtils;
 import com.jdimension.jlawyer.fax.BalanceInformation;
-import com.jdimension.jlawyer.fax.SipgateException;
+import com.jdimension.jlawyer.persistence.ArchiveFileBean;
 import com.jdimension.jlawyer.persistence.FaxQueueBean;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
 import com.jdimension.jlawyer.sip.SipUtils;
@@ -683,6 +685,8 @@ import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -700,7 +704,7 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
 
     private static final Logger log = Logger.getLogger(FaxStatusPanel.class.getName());
     private Image backgroundImage = null;
-    private SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
+    private final SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
     private ArrayList<FaxQueueBean> lastFaxList = new ArrayList<FaxQueueBean>();
 
     @Override
@@ -721,7 +725,6 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
             this.clearDetails();
 
             DefaultTableModel tm = buildTable(((FaxStatusEvent) e).getFaxList());
-            //ThreadUtils.setTableModel(tblQueue, tm);
             this.tblQueue.setModel(tm);
             ComponentUtils.autoSizeColumns(tblQueue);
             this.lastFaxList = ((FaxStatusEvent) e).getFaxList();
@@ -735,6 +738,8 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
     public FaxStatusPanel() {
 
         initComponents();
+        
+        VoipUtils.initializeSettings();
 
         EventBroker eb = EventBroker.getInstance();
         eb.subscribeConsumer(this, Event.TYPE_FAXSTATUS);
@@ -762,7 +767,6 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
     }
 
     private DefaultTableModel buildTable(List<FaxQueueBean> list) {
-        //DefaultTableModel tm = new DefaultTableModel(new String[]{"Gesendet", "von", "Absenderkennung", "an", "Empfängerkennung", "Datei", "aktueller Status", "Status vom", "Akte"}, 0);
         DefaultTableModel tm = new DefaultTableModel(new String[]{"Gesendet", "von", "an", "Datei", "aktueller Status", "Akte"}, 0);
         for (FaxQueueBean fb : list) {
             String aFile = "";
@@ -777,27 +781,19 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
 
     private void refreshList() {
         ClientSettings settings = ClientSettings.getInstance();
-        //EditorsRegistry.getInstance().updateStatus("Adresse wird gespeichert...");
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
 
-            new Thread(new Runnable() {
-
-                public void run() {
-                    ClientSettings settings = ClientSettings.getInstance();
-                    JLawyerServiceLocator locator = null;
-                    try {
-                        locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-
-                        BalanceInformation bi = locator.lookupVoipServiceRemote().getBalance();
-                        NumberFormat nf = NumberFormat.getCurrencyInstance();
-                        ThreadUtils.updateLabel(lblBalance, nf.format(bi.getTotal()));
-
-                    } catch (Exception ex) {
-                        log.error("Error retrieving Sipgate balance", ex);
-                        //JOptionPane.showMessageDialog(this, "Fehler beim Laden der Versicherungen: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
-                        //EditorsRegistry.getInstance().
-                    }
+            new Thread(() -> {
+                ClientSettings settings1 = ClientSettings.getInstance();
+                JLawyerServiceLocator locator1 = null;
+                try {
+                    locator1 = JLawyerServiceLocator.getInstance(settings1.getLookupProperties());
+                    BalanceInformation bi = locator1.lookupVoipServiceRemote().getBalance();
+                    NumberFormat nf = NumberFormat.getCurrencyInstance();
+                    ThreadUtils.updateLabel(lblBalance, nf.format(bi.getTotal()));
+                }catch (Exception ex) {
+                    log.error("Error retrieving Sipgate balance", ex);
                 }
             }).start();
 
@@ -807,16 +803,17 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
 
         } catch (Exception ex) {
             log.error(ex);
-            ThreadUtils.showErrorDialog(this, "Fehler beim Laden des VoIP-Status: " + ex.getMessage(), "Fehler");
+            ThreadUtils.showErrorDialog(this, "Fehler beim Laden des VoIP-Status: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
         }
     }
 
+    @Override
     public void setBackgroundImage(Image image) {
         this.backgroundImage = image;
-        //this.jPanel1.setOpaque(false);
 
     }
 
+    @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
         if (this.backgroundImage != null) {
@@ -857,15 +854,15 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
 
         jLabel18.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/fax_big.png"))); // NOI18N
 
-        lblPanelTitle.setFont(new java.awt.Font("Dialog", 1, 24)); // NOI18N
+        lblPanelTitle.setFont(lblPanelTitle.getFont().deriveFont(lblPanelTitle.getFont().getStyle() | java.awt.Font.BOLD, lblPanelTitle.getFont().getSize()+12));
         lblPanelTitle.setForeground(new java.awt.Color(255, 255, 255));
         lblPanelTitle.setText("Faxstatus");
 
-        jLabel1.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        jLabel1.setFont(jLabel1.getFont().deriveFont(jLabel1.getFont().getSize()+2f));
         jLabel1.setForeground(new java.awt.Color(255, 255, 255));
         jLabel1.setText("Guthaben:");
 
-        lblBalance.setFont(new java.awt.Font("Dialog", 1, 14)); // NOI18N
+        lblBalance.setFont(lblBalance.getFont().deriveFont(lblBalance.getFont().getSize()+2f));
         lblBalance.setForeground(new java.awt.Color(255, 255, 255));
         lblBalance.setText("0,00 EUR");
 
@@ -921,7 +918,7 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
         });
 
         cmdSaveReport.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/file_doc.png"))); // NOI18N
-        cmdSaveReport.setText("Bericht generieren");
+        cmdSaveReport.setText("Bericht speichern");
         cmdSaveReport.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 cmdSaveReportActionPerformed(evt);
@@ -976,7 +973,7 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
                                     .add(org.jdesktop.layout.GroupLayout.TRAILING, lblArchiveFile, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                                     .add(lblTo, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))))
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, jPanel1Layout.createSequentialGroup()
-                        .add(0, 224, Short.MAX_VALUE)
+                        .add(0, 231, Short.MAX_VALUE)
                         .add(selectAllToggle)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(cmdDelete)
@@ -1076,13 +1073,13 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
      *
      * @return Fax IDs from selected table items
      */
-    private List<String> getSelectedEntriesIDs() {
+    private HashMap<String,ArchiveFileBean> getSelectedEntriesIDs() {
         int[] selectedRows = this.tblQueue.getSelectedRows();
-        List ids = new ArrayList<String>();
+        HashMap<String,ArchiveFileBean> ids = new HashMap<>();
         // Convert array to list. Extract fax session ids.
         Arrays.stream(selectedRows).boxed().collect(Collectors.toList()).forEach(rowId -> {
             FaxQueueBean fb = (FaxQueueBean) this.tblQueue.getValueAt(rowId, 0);
-            ids.add(fb.getSessionId());
+            ids.put(fb.getSessionId(), fb.getArchiveFileKey());
         });
         return ids;
     }
@@ -1093,8 +1090,7 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
 
     private void tblQueueMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_tblQueueMouseClicked
         int row = this.tblQueue.rowAtPoint(evt.getPoint());
-        int col = this.tblQueue.columnAtPoint(evt.getPoint());
-
+        
         Object value = this.tblQueue.getValueAt(row, 0);
         if (value instanceof FaxQueueBean) {
             FaxQueueBean fb = (FaxQueueBean) value;
@@ -1104,12 +1100,16 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
             this.lblStatus.setText(SipUtils.getDisplayableStatus(fb.getLastStatus()) + " seit " + df.format(fb.getLastStatusDate()));
             int level = SipUtils.getStatusLevel(fb.getLastStatus());
             Icon icon = null;
-            if (level == SipUtils.STATUSLEVEL_ERROR) {
-                icon = new javax.swing.ImageIcon(getClass().getResource("/icons/redled.png"));
-            } else if (level == SipUtils.STATUSLEVEL_INPROGRESS) {
-                icon = new javax.swing.ImageIcon(getClass().getResource("/icons/yellowled.png"));
-            } else {
-                icon = new javax.swing.ImageIcon(getClass().getResource("/icons/greenled.png"));
+            switch (level) {
+                case SipUtils.STATUSLEVEL_ERROR:
+                    icon = new javax.swing.ImageIcon(getClass().getResource("/icons/redled.png"));
+                    break;
+                case SipUtils.STATUSLEVEL_INPROGRESS:
+                    icon = new javax.swing.ImageIcon(getClass().getResource("/icons/yellowled.png"));
+                    break;
+                default:
+                    icon = new javax.swing.ImageIcon(getClass().getResource("/icons/greenled.png"));
+                    break;
             }
             this.lblStatus.setIcon(icon);
 
@@ -1132,11 +1132,11 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
         ClientSettings settings = ClientSettings.getInstance();
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-            List<String> ids = this.getSelectedEntriesIDs();
-            locator.lookupVoipServiceRemote().deleteQueueEntries(ids);
+            HashMap<String,ArchiveFileBean> ids = this.getSelectedEntriesIDs();
+            locator.lookupVoipServiceRemote().deleteQueueEntries(new ArrayList<>(ids.keySet()));
         } catch (Exception ex) {
             log.error(ex);
-            ThreadUtils.showErrorDialog(this, "Fehler beim Löschen des Eintrages: " + ex.getMessage(), "Fehler");
+            ThreadUtils.showErrorDialog(this, "Fehler beim Löschen des Eintrages: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
 
         }
         this.clearDetails();
@@ -1146,13 +1146,27 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
         ClientSettings settings = ClientSettings.getInstance();
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-            List<String> ids = this.getSelectedEntriesIDs();
-            for (String id : ids) {
-                locator.lookupVoipServiceRemote().saveFaxReport(id);
+            
+            HashMap<String,ArchiveFileBean> ids = this.getSelectedEntriesIDs();
+            for (String id : ids.keySet()) {
+                String defaultName = locator.lookupVoipServiceRemote().getNewFaxReportFileName(id);
+                defaultName = FileUtils.getNewFileName(defaultName, false, new Date(), EditorsRegistry.getInstance().getMainWindow(), "Neuer Name für Faxbericht");
+                
+                boolean documentExists = locator.lookupArchiveFileServiceRemote().doesDocumentExist(ids.get(id).getId(), defaultName);
+                while (documentExists) {
+                    defaultName = FileUtils.getNewFileName(defaultName, false, new Date(), EditorsRegistry.getInstance().getMainWindow(), "Neuer Name für Faxbericht");
+                    if (defaultName == null || "".equals(defaultName)) {
+                        this.clearDetails();
+                        return;
+                    }
+                    documentExists = locator.lookupArchiveFileServiceRemote().doesDocumentExist(ids.get(id).getId(), defaultName);
+                }
+
+                locator.lookupVoipServiceRemote().saveFaxReport(id, defaultName);
             }
         } catch (Exception ex) {
             log.error(ex);
-            ThreadUtils.showErrorDialog(this, "Fehler beim Erstellen des Reports: " + ex.getMessage(), "Fehler");
+            ThreadUtils.showErrorDialog(this, "Fehler beim Erstellen des Reports: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
         }
         this.clearDetails();
     }//GEN-LAST:event_cmdSaveReportActionPerformed
@@ -1162,13 +1176,13 @@ public class FaxStatusPanel extends javax.swing.JPanel implements ThemeableEdito
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
 
-            List<String> ids = this.getSelectedEntriesIDs();
-            for (String id : ids) {
+            HashMap<String,ArchiveFileBean> ids = this.getSelectedEntriesIDs();
+            for (String id : ids.keySet()) {
                 locator.lookupVoipServiceRemote().reInitiateFax(id);
             }
         } catch (Exception ex) {
             log.error(ex);
-            ThreadUtils.showErrorDialog(this, "Fehler beim erneuten Senden: " + ex.getMessage(), "Fehler");
+            ThreadUtils.showErrorDialog(this, "Fehler beim erneuten Senden: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
         }
         this.clearDetails();
     }//GEN-LAST:event_cmdResendActionPerformed

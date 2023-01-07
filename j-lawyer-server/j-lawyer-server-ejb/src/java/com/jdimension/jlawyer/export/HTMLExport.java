@@ -682,6 +682,7 @@ import java.util.Collections;
 import static com.jdimension.jlawyer.server.utils.ServerStringUtils.toHtml4;
 import static com.jdimension.jlawyer.server.utils.ServerStringUtils.removeSonderzeichen;
 import com.jdimension.jlawyer.services.ArchiveFileServiceLocal;
+import com.jdimension.jlawyer.services.CalendarServiceLocal;
 import java.io.FileInputStream;
 import java.nio.file.attribute.FileTime;
 import java.text.NumberFormat;
@@ -698,19 +699,21 @@ public class HTMLExport {
 
     private static final Logger log = Logger.getLogger(HTMLExport.class.getName());
 
-    private static SimpleDateFormat dtf = new SimpleDateFormat("dd.MM.yyyy HH:mm");
-    private static SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy");
+    private final SimpleDateFormat dtf = new SimpleDateFormat("dd.MM.yyyy HH:mm");
+    private final SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy");
 
-    private static String CELL_BREAK = "\t";
-    private static String LINE_BREAK = System.getProperty("line.separator");
+    private static final String CELL_BREAK = "\t";
+    private static final String LINE_BREAK = System.getProperty("line.separator");
 
     private File targetDirectory = null;
 
     private ArchiveFileServiceLocal caseFacade;
+    private CalendarServiceLocal calendarFacade;
 
-    public HTMLExport(File targetDirectory, ArchiveFileServiceLocal caseFacade) {
+    public HTMLExport(File targetDirectory, ArchiveFileServiceLocal caseFacade, CalendarServiceLocal calendarFacade) {
         this.targetDirectory = targetDirectory;
         this.caseFacade = caseFacade;
+        this.calendarFacade=calendarFacade;
     }
 
     public File getExportFolderName(ArchiveFileBean dto) {
@@ -734,7 +737,7 @@ public class HTMLExport {
     }
 
     public String exportReviews() throws Exception {
-        Collection<ArchiveFileReviewsBean> reviews = this.caseFacade.getAllOpenReviewsUnrestricted();
+        Collection<ArchiveFileReviewsBean> reviews = this.calendarFacade.getAllOpenReviewsUnrestricted();
 
         if (!this.targetDirectory.exists()) {
             this.targetDirectory.mkdirs();
@@ -745,7 +748,7 @@ public class HTMLExport {
             revCsv.delete();
         }
 
-        StringBuffer excelStr = new StringBuffer();
+        StringBuilder excelStr = new StringBuilder();
 
         // faellig, Typ, Aktenzeichen, Kurzrubrum, Grund
         excelStr.append("faellig");
@@ -757,33 +760,61 @@ public class HTMLExport {
         excelStr.append("Kurzrubrum");
         excelStr.append(CELL_BREAK);
         excelStr.append("Grund");
+        excelStr.append(CELL_BREAK);
+        excelStr.append("archiviert");
+        excelStr.append(CELL_BREAK);
+        excelStr.append("Eigene 1");
+        excelStr.append(CELL_BREAK);
+        excelStr.append("Eigene 2");
+        excelStr.append(CELL_BREAK);
+        excelStr.append("Eigene 3");
+        excelStr.append(CELL_BREAK);
+        excelStr.append("Etiketten");
         excelStr.append(LINE_BREAK);
 
         for (ArchiveFileReviewsBean rev : reviews) {
 
-            excelStr.append(toDate(df, rev.getReviewDate()));
+            excelStr.append(toDate(df, rev.getBeginDate()));
             excelStr.append(CELL_BREAK);
-            if (rev.getReviewType() == ArchiveFileReviewsBean.REVIEWTYPE_FOLLOWUP) {
-                excelStr.append(escape("Wiedervorlage"));
-            } else if (rev.getReviewType() == ArchiveFileReviewsBean.REVIEWTYPE_FOLLOWUP) {
-                excelStr.append(escape("Frist"));
-            } else {
-                excelStr.append(escape("-"));
-            }
+            excelStr.append(escape(rev.getEventTypeName()));
             excelStr.append(CELL_BREAK);
             excelStr.append(escape(rev.getArchiveFileKey().getFileNumber()));
             excelStr.append(CELL_BREAK);
             excelStr.append(escape(rev.getArchiveFileKey().getName()));
             excelStr.append(CELL_BREAK);
-            excelStr.append(escape(rev.getReviewReason()));
+            excelStr.append(escape(rev.getSummary()));
+            excelStr.append(CELL_BREAK);
+            if(rev.getArchiveFileKey().getArchivedBoolean()) {
+                excelStr.append("ja");
+            } else {
+                excelStr.append("nein");
+            }
+            excelStr.append(CELL_BREAK);
+            excelStr.append(escape(rev.getArchiveFileKey().getCustom1()));
+            excelStr.append(CELL_BREAK);
+            excelStr.append(escape(rev.getArchiveFileKey().getCustom2()));
+            excelStr.append(CELL_BREAK);
+            excelStr.append(escape(rev.getArchiveFileKey().getCustom3()));
+            excelStr.append(CELL_BREAK);
+            Collection<ArchiveFileTagsBean> tags=this.caseFacade.getTagsUnrestricted(rev.getArchiveFileKey().getId());
+            StringBuilder tagBuffer=new StringBuilder();
+            for(ArchiveFileTagsBean tag: tags) {
+                tagBuffer.append(tag);
+                tagBuffer.append(" / ");
+            }
+            String tagString=tagBuffer.toString();
+            if(tagString.endsWith(" / ")) {
+                tagString=tagString.substring(0, tagString.length()-3);
+            }
+            excelStr.append(escape(tagString));
             excelStr.append(LINE_BREAK);
 
         }
 
-        FileWriter fw = new FileWriter(revCsv);
-        fw.write(excelStr.toString());
-        fw.flush();
-        fw.close();
+        try (FileWriter fw = new FileWriter(revCsv)) {
+            fw.write(excelStr.toString());
+            fw.flush();
+        }
 
         return revCsv.getPath();
     }
@@ -835,14 +866,10 @@ public class HTMLExport {
         Collection documents = null;
         Collection parties = null;
         Collection reviews = null;
-        //ClientSettings settings = ClientSettings.getInstance();
-        //JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-
-        //ArchiveFileServiceRemoteHome home = (ArchiveFileServiceRemoteHome)locator.getRemoteHome("ejb/ArchiveFileServiceBean", ArchiveFileServiceRemoteHome.class);
-        //ArchiveFileServiceRemote fileService = locator.lookupArchiveFileServiceRemote();
+        
         history = caseFacade.getHistoryForArchiveFileUnrestricted(dto.getId());
         parties = caseFacade.getInvolvementDetailsForCaseUnrestricted(dto.getId());
-        reviews = caseFacade.getReviewsUnrestricted(dto.getId());
+        reviews = calendarFacade.getReviewsUnrestricted(dto.getId());
         documents = caseFacade.getDocumentsUnrestricted(dto.getId());
 
         Arrays.sort(history, new HistoryComparator());
@@ -869,21 +896,18 @@ public class HTMLExport {
         for (Object r : reviewsList) {
             if (r instanceof ArchiveFileReviewsBean) {
                 ArchiveFileReviewsBean rb = (ArchiveFileReviewsBean) r;
-                // <tr><td><p class="post_info">01.01.2013</p></td><td><p class="post_info">dings</p></td></tr>
                 sb.append("<tr valign=\"top\"><td><p class=\"post_info\">");
-                sb.append(toDate(dtf, rb.getReviewDate()));
+                sb.append(toDate(dtf, rb.getBeginDate()));
                 sb.append("</p></td><td><p class=\"post_info\">");
-                sb.append(toHtml4(rb.getReviewReason()));
+                sb.append(toHtml4(rb.getSummary()));
                 sb.append("</p></td><td><p class=\"post_info\">");
-                sb.append("(" + toHtml4(rb.getReviewTypeName()) + ")");
+                sb.append("(" + toHtml4(rb.getEventTypeName()) + ")");
                 sb.append("</p></td></tr>");
             }
         }
         sContent = sContent.replaceAll("\\{\\{reviews\\}\\}", sb.toString());
 
         sContent = sContent.replaceAll("\\{\\{parties\\}\\}", this.getPartiesList(parties));
-//        sContent = sContent.replaceAll("\\{\\{opponents\\}\\}", this.getPartiesList(opponents));
-//        sContent = sContent.replaceAll("\\{\\{opponentattorneys\\}\\}", this.getPartiesList(opponentAttorneys));
 
         ArrayList docList = new ArrayList(documents);
         Collections.sort(docList, new DocumentsComparator());
@@ -896,9 +920,9 @@ public class HTMLExport {
 
                 try {
                     byte[] docContent = caseFacade.getDocumentContentUnrestricted(db.getId());
-                    FileOutputStream docOut = new FileOutputStream(newDir3.getAbsolutePath() + System.getProperty("file.separator") + dbNewName);
-                    docOut.write(docContent);
-                    docOut.close();
+                    try (FileOutputStream docOut = new FileOutputStream(newDir3.getAbsolutePath() + System.getProperty("file.separator") + dbNewName)) {
+                        docOut.write(docContent);
+                    }
                     File docOutFile = new File(newDir3.getAbsolutePath() + System.getProperty("file.separator") + dbNewName);
                     if (db.getCreationDate() != null) {
                         docOutFile.setLastModified(db.getCreationDate().getTime());
@@ -919,19 +943,27 @@ public class HTMLExport {
                 if (db.getDictateSign() != null) {
                     sb.append(db.getDictateSign());
                 }
-                sb.append("</p></td></tr>");
+                sb.append("</p></td>");
+                sb.append("<td><p class=\"post_info\">");
+                if (db.getFolder() != null) {
+                    sb.append("Ordner: ").append(removeSonderzeichen(db.getFolder().getName()));
+                } else {
+                    sb.append("");
+                }
+                sb.append("</p></td>");
+                sb.append("</tr>");
             }
         }
         sContent = sContent.replaceAll("\\{\\{documents\\}\\}", sb.toString());
 
-        FileWriter fw = new FileWriter(indexFile);
-        fw.write(sContent);
-        fw.close();
+        try (FileWriter fw = new FileWriter(indexFile)) {
+            fw.write(sContent);
+        }
 
         if (lastModified != null) {
-            FileWriter fwmod = new FileWriter(newDir.getPath() + File.separator + ".lastchanged");
-            fwmod.write("" + lastModified.getTime());
-            fwmod.close();
+            try (FileWriter fwmod = new FileWriter(newDir.getPath() + File.separator + ".lastchanged")) {
+                fwmod.write("" + lastModified.getTime());
+            }
         }
 
         return newDir.getAbsolutePath();
@@ -947,13 +979,12 @@ public class HTMLExport {
     }
 
     public void zipDirectory(String dirToZip, String targetFile) throws Exception {
-        FileOutputStream fos = new FileOutputStream(targetFile);
-        ZipOutputStream zos = new ZipOutputStream(fos);
-        addDirToZipArchive(zos, new File(dirToZip), null);
-        zos.flush();
-        fos.flush();
-        zos.close();
-        fos.close();
+        try (FileOutputStream fos = new FileOutputStream(targetFile);
+                ZipOutputStream zos = new ZipOutputStream(fos)) {
+            addDirToZipArchive(zos, new File(dirToZip), null);
+            zos.flush();
+            fos.flush();
+        }
     }
 
     private void addDirToZipArchive(ZipOutputStream zos, File fileToZip, String parrentDirectoryName) throws Exception {
@@ -974,50 +1005,49 @@ public class HTMLExport {
         } else {
             System.out.println("   " + zipEntryName);
             byte[] buffer = new byte[1024];
-            FileInputStream fis = new FileInputStream(fileToZip);
-            ZipEntry ze=new ZipEntry(zipEntryName);
-            try {
-                ze.setLastModifiedTime(FileTime.fromMillis(fileToZip.lastModified()));
-            } catch (Throwable t) {
-                log.error("Could not set last modified time of " + fileToZip.getName(), t);
+            try (FileInputStream fis = new FileInputStream(fileToZip)) {
+                ZipEntry ze = new ZipEntry(zipEntryName);
+                try {
+                    ze.setLastModifiedTime(FileTime.fromMillis(fileToZip.lastModified()));
+                } catch (Throwable t) {
+                    log.error("Could not set last modified time of " + fileToZip.getName(), t);
+                }
+                zos.putNextEntry(ze);
+                int length;
+                while ((length = fis.read(buffer)) > 0) {
+                    zos.write(buffer, 0, length);
+                }
+                zos.closeEntry();
             }
-            zos.putNextEntry(ze);
-            int length;
-            while ((length = fis.read(buffer)) > 0) {
-                zos.write(buffer, 0, length);
-            }
-            zos.closeEntry();
-            fis.close();
         }
     }
 
     private String getPartiesList(Collection parties) {
         ArrayList partiesList = new ArrayList(parties);
-        //Collections.sort(partiesList, new ReviewsComparator());
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         for (Object p : partiesList) {
             if (p instanceof ArchiveFileAddressesBean) {
                 AddressBean ab = ((ArchiveFileAddressesBean) p).getAddressKey();
-                PartyTypeBean pt=((ArchiveFileAddressesBean) p).getReferenceType();
+                PartyTypeBean pt = ((ArchiveFileAddressesBean) p).getReferenceType();
                 // <tr><td><p class="post_info">01.01.2013</p></td><td><p class="post_info">dings</p></td></tr>
                 //sb.append("<tr valign=\"top\"><td><p class=\"post_info\">");
                 sb.append("<p class=\"post_info\">");
                 sb.append(toHtml4(ab.toDisplayName() + " (" + pt.getName() + ")"));
-                if(ab.getStreet()!=null && ab.getZipCode()!=null && ab.getCity()!=null) {
-                    if(!("".equals(ab.getStreet())) && !("".equals(ab.getZipCode())) && !("".equals(ab.getCity()))) {
+                if (ab.getStreet() != null && ab.getZipCode() != null && ab.getCity() != null) {
+                    if (!("".equals(ab.getStreet())) && !("".equals(ab.getZipCode())) && !("".equals(ab.getCity()))) {
                         sb.append(toHtml4(", " + ab.getStreet()));
-                        if(ab.getStreetNumber()!=null && !"".equals(ab.getStreetNumber()))
-                            sb.append(toHtml4(" "+ab.getStreetNumber()));
+                        if (ab.getStreetNumber() != null && !"".equals(ab.getStreetNumber())) {
+                            sb.append(toHtml4(" " + ab.getStreetNumber()));
+                        }
                         sb.append(toHtml4(", " + ab.getZipCode() + " " + ab.getCity()));
                     }
                 }
-                if(ab.getPhone()!=null)
-                    sb.append(", Tel: " + ab.getPhone());
-                if(ab.getMobile()!=null)
-                    sb.append(", Mob: " + ab.getMobile());
-//                sb.append("</p></td><td><p class=\"post_info\">");
-//                sb.append(rb.getReviewReason());
-                //sb.append("</p></td></tr>");
+                if (ab.getPhone() != null) {
+                    sb.append(", Tel: ").append(ab.getPhone());
+                }
+                if (ab.getMobile() != null) {
+                    sb.append(", Mob: ").append(ab.getMobile());
+                }
                 sb.append("</p>");
             }
         }
@@ -1025,15 +1055,14 @@ public class HTMLExport {
     }
 
     private void copyToLocal(String resource, String name, File dir, String subDir) throws Exception {
-        InputStream is = this.getClass().getClassLoader().getResourceAsStream(resource);
-        FileOutputStream fOut = new FileOutputStream(dir.getAbsolutePath() + System.getProperty("file.separator") + subDir + name);
-        byte[] buffer = new byte[256];
-        int len = 0;
-        while ((len = is.read(buffer)) > 0) {
-            fOut.write(buffer, 0, len);
+        try (InputStream is = this.getClass().getClassLoader().getResourceAsStream(resource);
+                FileOutputStream fOut = new FileOutputStream(dir.getAbsolutePath() + System.getProperty("file.separator") + subDir + name);) {
+            byte[] buffer = new byte[256];
+            int len = 0;
+            while ((len = is.read(buffer)) > 0) {
+                fOut.write(buffer, 0, len);
 
+            }
         }
-        is.close();
-        fOut.close();
     }
 }

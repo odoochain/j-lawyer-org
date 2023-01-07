@@ -663,7 +663,6 @@
  */
 package com.jdimension.jlawyer.server.modules;
 
-import java.awt.event.KeyEvent;
 import java.awt.Image;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -746,18 +745,22 @@ public class ModuleMetadata implements TreeNode {
         this.text=text;
     }
 
+    @Override
     public TreeNode getChildAt(int i) {
         return this.childModules.get(i);
     }
 
+    @Override
     public int getIndex(TreeNode treeNode) {
         return this.childModules.indexOf(treeNode);
     }
 
+    @Override
     public boolean isLeaf() {
-        return this.childModules.size()==0;
+        return this.childModules.isEmpty();
     }
 
+    @Override
     public TreeNode getParent() {
         return parent;
     }
@@ -766,18 +769,22 @@ public class ModuleMetadata implements TreeNode {
         this.parent=parent;
     }
 
+    @Override
     public int getChildCount() {
         return this.childModules.size();
     }
 
+    @Override
     public boolean getAllowsChildren() {
         return true;
     }
 
+    @Override
     public Enumeration children() {
         return new Vector(this.childModules).elements();
     }
 
+    @Override
     public String toString() {
         return this.text;
     }
@@ -806,6 +813,7 @@ public class ModuleMetadata implements TreeNode {
         this.iconAsImage = iconAsImage;
     }
 
+    @Override
     public boolean equals(Object obj) {
         if(obj==null)
             return false;
@@ -942,6 +950,7 @@ public class ModuleMetadata implements TreeNode {
 
     /**
      * @param hotKey the hotKey to set
+     * @param keyName
      */
     public void setHotKey(KeyStroke hotKey, String keyName) {
         this.hotKey = hotKey;

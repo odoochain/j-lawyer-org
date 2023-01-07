@@ -671,34 +671,36 @@ import com.jdimension.jlawyer.client.editors.StatusBarProvider;
 import com.jdimension.jlawyer.client.editors.ThemeableEditor;
 import com.jdimension.jlawyer.client.editors.addresses.CaseForContactEntry;
 import com.jdimension.jlawyer.client.editors.documents.SearchAndAssignDialog;
+import com.jdimension.jlawyer.client.editors.files.BeaEntryProcessor;
+import com.jdimension.jlawyer.client.editors.files.BulkSaveDialog;
+import com.jdimension.jlawyer.client.editors.files.BulkSaveEntry;
 import com.jdimension.jlawyer.client.editors.files.DescendingDateTimeStringComparator;
 import com.jdimension.jlawyer.client.editors.files.FileNumberComparator;
-import com.jdimension.jlawyer.client.events.AllCaseTagsEvent;
-import com.jdimension.jlawyer.client.events.AllDocumentTagsEvent;
 import com.jdimension.jlawyer.client.events.BeaStatusEvent;
-import com.jdimension.jlawyer.client.events.Event;
 import com.jdimension.jlawyer.client.events.EventBroker;
-import com.jdimension.jlawyer.client.events.EventConsumer;
 import com.jdimension.jlawyer.client.mail.sidebar.CreateNewAddressPanel;
+import com.jdimension.jlawyer.client.mail.sidebar.ExtractedPhoneNumbersPanel;
 import com.jdimension.jlawyer.client.mail.sidebar.NavigateToAddressPanel;
 import com.jdimension.jlawyer.client.mail.sidebar.SaveToCasePanel;
 import com.jdimension.jlawyer.client.processing.ProgressIndicator;
 import com.jdimension.jlawyer.client.settings.ClientSettings;
+import com.jdimension.jlawyer.client.settings.ServerSettings;
 import com.jdimension.jlawyer.client.settings.UserSettings;
 import com.jdimension.jlawyer.client.utils.*;
 import com.jdimension.jlawyer.persistence.AddressBean;
-import com.jdimension.jlawyer.persistence.AppOptionGroupBean;
 import com.jdimension.jlawyer.persistence.AppUserBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileAddressesBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileDocumentsBean;
-import com.jdimension.jlawyer.persistence.ArchiveFileTagsBean;
-import com.jdimension.jlawyer.persistence.DocumentTagsBean;
+import com.jdimension.jlawyer.persistence.CaseFolder;
+import com.jdimension.jlawyer.security.Crypto;
 import com.jdimension.jlawyer.services.AddressServiceRemote;
 import com.jdimension.jlawyer.services.ArchiveFileServiceRemote;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
+import com.jdimension.jlawyer.services.Keyword;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Desktop;
 import java.awt.Graphics;
 import java.awt.GridLayout;
 import java.awt.Image;
@@ -706,15 +708,17 @@ import java.awt.Point;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.dnd.*;
+import java.awt.event.MouseEvent;
 import java.io.File;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
-import java.util.Hashtable;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -748,13 +752,11 @@ import org.jlawyer.bea.model.Recipient;
  *
  * @author jens
  */
-public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecutor, EebExecutor, BeaLoginCallback, ThemeableEditor, StatusBarProvider, ResetOnDisplayEditor, DropTargetListener, DragGestureListener, EventConsumer {
+public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecutor, EebExecutor, BeaLoginCallback, ThemeableEditor, StatusBarProvider, ResetOnDisplayEditor, DropTargetListener, DragGestureListener {
 
     private static final Logger log = Logger.getLogger(BeaInboxPanel.class.getName());
-    private static SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy, HH:mm");
     private Image backgroundImage = null;
     private BeaFolderTreeCellRenderer renderer = null;
-    private boolean connected = false;
 
     private DragSource dragSource = null;
 
@@ -763,7 +765,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
     private boolean needsReset = false;
 
     /**
-     * Creates new form AddressPanel
+     * Creates new form BeaInboxPanel
      */
     public BeaInboxPanel() {
 
@@ -771,35 +773,56 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
         initComponents();
 
+        this.lblTempFilesWarning.setIcon(null);
+        this.lblTempFilesWarning.setText("");
+
+        try {
+
+            new Thread(() -> {
+                try {
+                    int tempFolders = BeaAccess.countTempFolders();
+                    int tempFoldersLimit = ServerSettings.getInstance().getSettingAsInt("jlawyer.server.bea.maxtempfolders", 500);
+                    if (tempFolders > tempFoldersLimit) {
+                        SwingUtilities.invokeLater(() -> {
+                            lblTempFilesWarning.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/messagebox_warning.png"))); // NOI18N
+                            lblTempFilesWarning.setText("Hinweis: temporäre Dateien");
+                            lblTempFilesWarning.setToolTipText("Verzeichnis " + System.lineSeparator() + "   " + BeaAccess.getTempFolder() + System.lineSeparator() + "enthält " + tempFolders + " Ordner - Verzeichnis sollte manuell bereinigt werden," + System.lineSeparator() + "anderenfalls ist mit Geschwindigkeitseinbußen zu rechnen.");
+                        });
+                    }
+                } catch (Exception ex) {
+                    log.error(ex);
+                }
+                initializing = false;
+            }).start();
+
+        } catch (Exception ex) {
+            log.error(ex);
+        }
+
         ComponentUtils.decorateSplitPane(jSplitPane1);
         ComponentUtils.decorateSplitPane(this.mainSplitter);
         ComponentUtils.decorateSplitPane(this.splitterFolderDetails);
 
         ClientSettings cs = ClientSettings.getInstance();
-        String temp = cs.getConfiguration(ClientSettings.CONF_BEA_TAGGINGENABLED, "false");
-        boolean taggingEnabled = false;
-        if ("true".equalsIgnoreCase(temp)) {
-            taggingEnabled = true;
-            this.chkCaseTagging.setSelected(true);
-        }
-
-        temp = cs.getConfiguration(ClientSettings.CONF_BEA_DOCUMENTTAGGINGENABLED, "false");
-        if ("true".equalsIgnoreCase(temp)) {
-            this.chkDocumentTagging.setSelected(true);
-        }
-
-        temp = cs.getConfiguration(ClientSettings.CONF_BEA_MOVETOIMPORTEDENABLED, "false");
+        String temp = cs.getConfiguration(ClientSettings.CONF_BEA_MOVETOIMPORTEDENABLED, "false");
         if ("true".equalsIgnoreCase(temp)) {
             this.chkMoveToImported.setSelected(true);
         }
 
-        EventBroker eb = EventBroker.getInstance();
-        eb.subscribeConsumer(this, Event.TYPE_ALLCASETAGS);
-        eb.subscribeConsumer(this, Event.TYPE_ALLDOCUMENTTAGS);
-
         this.emptyView();
 
         this.treeFolders.setDropMode(DropMode.ON);
+
+        this.cmbDownloadMails.removeAllItems();
+        this.cmbDownloadMails.setModel(new javax.swing.DefaultComboBoxModel(LoadFolderRestriction.ALL_RESTRICTIONS.toArray()));
+        String restriction = cs.getConfiguration(ClientSettings.CONF_BEA_DOWNLOADRESTRICTION, "" + LoadFolderRestriction.RESTRICTION_50);
+        for (int i = 0; i < this.cmbDownloadMails.getItemCount(); i++) {
+            LoadFolderRestriction r = (LoadFolderRestriction) ((DefaultComboBoxModel) this.cmbDownloadMails.getModel()).getElementAt(i);
+            if (restriction.equals("" + r.getRestriction())) {
+                this.cmbDownloadMails.setSelectedIndex(i);
+                break;
+            }
+        }
 
         Runtime.getRuntime().addShutdownHook(new Thread(new BeaObjectsCleanUp()));
         DropTarget dt = new DropTarget(this.treeFolders, this);
@@ -813,28 +836,34 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
         AppUserBean cu = UserSettings.getInstance().getCurrentUser();
 
+        ComponentUtils.restoreSplitPane(this.mainSplitter, this.getClass(), "mainSplitter");
+        ComponentUtils.persistSplitPane(this.mainSplitter, this.getClass(), "mainSplitter");
+
+        ComponentUtils.restoreSplitPane(this.splitterFolderDetails, this.getClass(), "splitterFolderDetails");
+        ComponentUtils.persistSplitPane(this.splitterFolderDetails, this.getClass(), "splitterFolderDetails");
+
+        ComponentUtils.restoreSplitPane(this.jSplitPane1, this.getClass(), "jSplitPane1");
+        ComponentUtils.persistSplitPane(this.jSplitPane1, this.getClass(), "jSplitPane1");
+
         // cancel constructur if there is no email configuration
         if (!BeaUtils.hasCertificateConfig(cu) || (BeaUtils.hasCertificateConfig(cu) && !cu.isBeaCertificateAutoLogin()) || !BeaAccess.isBeaEnabled()) {
             this.treeFolders.setEnabled(false);
             this.cmdNew.setEnabled(false);
             this.cmdRefresh.setEnabled(false);
             this.initializing = false;
-            //BeaLoginPanel loginPanel=new BeaLoginPanel(this, true);
             this.needsReset = true;
             return;
         }
 
         try {
-            new Thread(new Runnable() {
-                public void run() {
-                    try {
-                        initWithCertificate();
-                        refreshFolders(false);
-                    } catch (Exception ex) {
-                        log.error(ex);
-                    }
-                    initializing = false;
+            new Thread(() -> {
+                try {
+                    initWithCertificate();
+                    refreshFolders(false);
+                } catch (Exception ex) {
+                    log.error(ex);
                 }
+                initializing = false;
             }).start();
 
         } catch (Exception ex) {
@@ -849,10 +878,9 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         DefaultTreeModel dtm = new DefaultTreeModel(rootNode);
         this.treeFolders.setModel(dtm);
 
-//        DefaultTableModel tm = new DefaultTableModel(new String[]{"eEB", "dringend", "vertraulich", "prüfen", "Betreff", "Absender", "Empfänger", "Gesendet", "Az", "Az (Justiz)"}, 0);
         DefaultTableModel tm = new DefaultTableModel(new String[]{"", "", "", "Betreff", "Absender", "Empfänger", "Datum", "Az Absender", "Az Empfänger"}, 0);
         this.tblMails.setModel(tm);
-        TableRowSorter<TableModel> sorter = new TableRowSorter<TableModel>(tm);
+        TableRowSorter<TableModel> sorter = new TableRowSorter<>(tm);
         sorter.setComparator(6, new DescendingDateTimeStringComparator());
         this.tblMails.setRowSorter(sorter);
 
@@ -861,31 +889,23 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         this.treeFolders.setCellRenderer(renderer);
     }
 
-//    private final void initWithCard() throws BeaWrapperException {
-//        BeaAccess bea = BeaAccess.getInstance();
-//        bea.login();
-//        this.treeFolders.setEnabled(true);
-//            this.cmdNew.setEnabled(true);
-//            this.cmdRefresh.setEnabled(true);
-//            this.initializing = false;
-//            //BeaLoginPanel loginPanel=new BeaLoginPanel(this, true);
-//            this.needsReset=false;
-//            return;
-//    }
-    private final void initWithCertificate() throws BeaWrapperException {
+    private void initWithCertificate() throws BeaWrapperException {
         AppUserBean cu = UserSettings.getInstance().getCurrentUser();
-        BeaAccess bea = BeaAccess.getInstance(cu.getBeaCertificate(), cu.getBeaCertificatePassword());
+        String pwd = null;
+        try {
+            pwd = Crypto.decrypt(cu.getBeaCertificatePassword());
+        } catch (GeneralSecurityException | IOException ge) {
+            log.error("Unable to decrypt beA certificate password");
+            throw new BeaWrapperException(ge);
+        }
+        BeaAccess bea = BeaAccess.getInstance(cu.getBeaCertificate(), pwd);
         bea.login();
         if (!SwingUtilities.isEventDispatchThread()) {
             try {
-                SwingUtilities.invokeAndWait(new Runnable() {
-                    @Override
-                    public void run() {
-                        treeFolders.setEnabled(true);
-                        cmdNew.setEnabled(true);
-                        cmdRefresh.setEnabled(true);
-                    }
-
+                SwingUtilities.invokeAndWait(() -> {
+                    treeFolders.setEnabled(true);
+                    cmdNew.setEnabled(true);
+                    cmdRefresh.setEnabled(true);
                 });
             } catch (Exception ex) {
                 this.treeFolders.setEnabled(true);
@@ -900,9 +920,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         }
         this.initializing = false;
 
-        //BeaLoginPanel loginPanel=new BeaLoginPanel(this, true);
         this.needsReset = false;
-        return;
     }
 
     public void refreshFolders(boolean showErrorDialogOnFailure) throws Exception {
@@ -911,7 +929,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         EditorsRegistry.getInstance().updateStatus("beA-Postfächer werden geladen...");
         DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode("beA-Postfächer");
         Collection<PostBox> inboxes = bea.getPostBoxes();
-        Hashtable<String, Folder> inboxFolders = new Hashtable<String, Folder>();
+        HashMap<String, Folder> inboxFolders = new HashMap<>();
         for (PostBox pb : inboxes) {
             EditorsRegistry.getInstance().updateStatus("Lade beA-Postfach" + pb.getSafeId() + "...");
             try {
@@ -919,8 +937,8 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                 SortedBeaFolderNode pbNode = new SortedBeaFolderNode(identity);
                 rootNode.add(pbNode);
                 Collection<org.jlawyer.bea.model.Folder> folders = bea.getFolderStructure(pb.getSafeId());
-                Hashtable folderTable = new Hashtable();
-                Hashtable nodeTable = new Hashtable();
+                HashMap folderTable = new HashMap();
+                HashMap nodeTable = new HashMap();
                 for (org.jlawyer.bea.model.Folder f : folders) {
                     // collect all inbox folders for later
                     if (f.getType().equals(Folder.TYPE_INBOX)) {
@@ -946,19 +964,13 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             }
         }
 
-        //this.traverseFolders(rootNode);
         if (!SwingUtilities.isEventDispatchThread()) {
-            SwingUtilities.invokeAndWait(new Runnable() {
-                @Override
-                public void run() {
-                    DefaultTreeModel tm = new DefaultTreeModel(rootNode);
-                    treeFolders.setModel(tm);
-                    JTreeUtils.expandAll(treeFolders);
+            SwingUtilities.invokeAndWait(() -> {
+                DefaultTreeModel tm = new DefaultTreeModel(rootNode);
+                treeFolders.setModel(tm);
+                JTreeUtils.expandAll(treeFolders);
 
-                    treeFolders.setCellRenderer(renderer);
-
-                }
-
+                treeFolders.setCellRenderer(renderer);
             });
         } else {
             DefaultTreeModel tm = new DefaultTreeModel(rootNode);
@@ -980,14 +992,18 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                             Folder inbox = inboxFolders.get(safeId);
                             if (inbox != null) {
                                 EditorsRegistry.getInstance().updateStatus("Nachrichtenübersicht wird geladen für " + inbox.getName() + "...");
-                                ArrayList<MessageHeader> messages = BeaAccess.getInstance().getFolderOverview(inbox);
+                                List<MessageHeader> messages = BeaAccess.getInstance().getFolderOverview(inbox, BeaAccess.getFilter());
                                 EditorsRegistry.getInstance().clearStatus();
                                 int unread = 0;
                                 for (MessageHeader mh : messages) {
                                     EditorsRegistry.getInstance().updateStatus("beA-Nachricht wird geladen: " + StringUtils.nonNull(mh.getSubject()));
-                                    BeaAccess.getInstance().getMessage(mh.getId(), safeId);
-                                    if (!mh.isRead()) {
-                                        unread = unread + 1;
+                                    try {
+                                        BeaAccess.getInstance().getMessage(mh.getId(), safeId);
+                                        if (!mh.isRead()) {
+                                            unread = unread + 1;
+                                        }
+                                    } catch (Throwable t) {
+                                        log.error("Unable to get beA message " + mh.getId() + " for SafeID " + safeId);
                                     }
                                 }
                                 BeaStatusEvent e = new BeaStatusEvent(unread);
@@ -1011,12 +1027,13 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
     }
 
+    @Override
     public void setBackgroundImage(Image image) {
         this.backgroundImage = image;
-        //this.jPanel1.setOpaque(false);
 
     }
 
+    @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
         if (this.backgroundImage != null) {
@@ -1037,6 +1054,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         mnuRemoveFolder = new javax.swing.JMenuItem();
         mnuEmptyTrash = new javax.swing.JMenuItem();
         popEmailList = new javax.swing.JPopupMenu();
+        mnuMarkRead = new javax.swing.JMenuItem();
         mnuSearchSave = new javax.swing.JMenuItem();
         mnuSearchSaveNoAttachments = new javax.swing.JMenuItem();
         mnuSearchSaveOnlyAttachments = new javax.swing.JMenuItem();
@@ -1061,18 +1079,16 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         jScrollPane3 = new javax.swing.JScrollPane();
         tblMails = new javax.swing.JTable();
         jPanel2 = new javax.swing.JPanel();
-        chkCaseTagging = new javax.swing.JCheckBox();
-        cmbCaseTag = new javax.swing.JComboBox<>();
         jSplitPane1 = new javax.swing.JSplitPane();
         jScrollPane4 = new javax.swing.JScrollPane();
         pnlActions = new javax.swing.JPanel();
         pnlActionsChild = new javax.swing.JPanel();
         beaMessageContentUI = new com.jdimension.jlawyer.client.bea.BeaMessageContentUI();
-        chkDocumentTagging = new javax.swing.JCheckBox();
-        cmbDocumentTag = new javax.swing.JComboBox<>();
-        chkMoveToImported = new javax.swing.JCheckBox();
         cmdRefresh = new javax.swing.JButton();
         cmdLogout = new javax.swing.JButton();
+        chkMoveToImported = new javax.swing.JCheckBox();
+        lblTempFilesWarning = new javax.swing.JLabel();
+        cmbDownloadMails = new javax.swing.JComboBox<>();
 
         mnuNewFolder.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/edit_add.png"))); // NOI18N
         mnuNewFolder.setText("neuer Ordner");
@@ -1100,6 +1116,15 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             }
         });
         popFolders.add(mnuEmptyTrash);
+
+        mnuMarkRead.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/agt_action_success.png"))); // NOI18N
+        mnuMarkRead.setText("als gelesen markieren");
+        mnuMarkRead.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                mnuMarkReadActionPerformed(evt);
+            }
+        });
+        popEmailList.add(mnuMarkRead);
 
         mnuSearchSave.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/find.png"))); // NOI18N
         mnuSearchSave.setText("in Akte speichern...");
@@ -1144,7 +1169,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
         jLabel18.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/Icons2-16.png"))); // NOI18N
 
-        lblPanelTitle.setFont(new java.awt.Font("Dialog", 1, 24)); // NOI18N
+        lblPanelTitle.setFont(lblPanelTitle.getFont().deriveFont(lblPanelTitle.getFont().getStyle() | java.awt.Font.BOLD, lblPanelTitle.getFont().getSize()+12));
         lblPanelTitle.setForeground(new java.awt.Color(255, 255, 255));
         lblPanelTitle.setText("Anwaltspostfach");
 
@@ -1276,20 +1301,6 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
         splitterFolderDetails.setLeftComponent(jScrollPane3);
 
-        chkCaseTagging.setText("Aktenetikett:");
-        chkCaseTagging.setActionCommand("Zielakte markieren:");
-        chkCaseTagging.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                chkCaseTaggingActionPerformed(evt);
-            }
-        });
-
-        cmbCaseTag.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                cmbCaseTagActionPerformed(evt);
-            }
-        });
-
         pnlActions.setLayout(new java.awt.FlowLayout(java.awt.FlowLayout.LEADING));
 
         org.jdesktop.layout.GroupLayout pnlActionsChildLayout = new org.jdesktop.layout.GroupLayout(pnlActionsChild);
@@ -1310,59 +1321,17 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         jSplitPane1.setRightComponent(jScrollPane4);
         jSplitPane1.setLeftComponent(beaMessageContentUI);
 
-        chkDocumentTagging.setText("Dokumentetikett:");
-        chkDocumentTagging.setActionCommand("Zielakte markieren:");
-        chkDocumentTagging.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                chkDocumentTaggingActionPerformed(evt);
-            }
-        });
-
-        cmbDocumentTag.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                cmbDocumentTagActionPerformed(evt);
-            }
-        });
-
-        chkMoveToImported.setText("in \"importiert\" verschieben");
-        chkMoveToImported.setToolTipText("verschiebt die Nachricht nach Zuordnung in den Ordner \"in Akte importiert\"");
-        chkMoveToImported.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                chkMoveToImportedActionPerformed(evt);
-            }
-        });
-
         org.jdesktop.layout.GroupLayout jPanel2Layout = new org.jdesktop.layout.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
         jPanel2Layout.setHorizontalGroup(
             jPanel2Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(jPanel2Layout.createSequentialGroup()
-                .add(jPanel2Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(jPanel2Layout.createSequentialGroup()
-                        .add(chkCaseTagging)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(cmbCaseTag, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                        .add(18, 18, 18)
-                        .add(chkDocumentTagging)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(cmbDocumentTag, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                        .add(18, 18, 18)
-                        .add(chkMoveToImported)
-                        .add(0, 0, Short.MAX_VALUE))
-                    .add(jSplitPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 864, Short.MAX_VALUE))
+                .add(jSplitPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 864, Short.MAX_VALUE)
                 .addContainerGap())
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(jPanel2Layout.createSequentialGroup()
-                .add(jPanel2Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(cmbCaseTag, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                    .add(chkCaseTagging)
-                    .add(cmbDocumentTag, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                    .add(chkDocumentTagging)
-                    .add(chkMoveToImported))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jSplitPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 281, Short.MAX_VALUE))
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, jSplitPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 278, Short.MAX_VALUE)
         );
 
         splitterFolderDetails.setRightComponent(jPanel2);
@@ -1385,15 +1354,47 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             }
         });
 
+        chkMoveToImported.setFont(chkMoveToImported.getFont().deriveFont(chkMoveToImported.getFont().getStyle() | java.awt.Font.BOLD));
+        chkMoveToImported.setForeground(new java.awt.Color(255, 255, 255));
+        chkMoveToImported.setText("in \"importiert\" verschieben");
+        chkMoveToImported.setToolTipText("verschiebt die Nachricht nach Zuordnung in den Ordner \"in Akte importiert\"");
+        chkMoveToImported.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                chkMoveToImportedActionPerformed(evt);
+            }
+        });
+
+        lblTempFilesWarning.setForeground(new java.awt.Color(255, 255, 255));
+        lblTempFilesWarning.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/messagebox_warning.png"))); // NOI18N
+        lblTempFilesWarning.setText("Hinweis: temporäre Dateien");
+        lblTempFilesWarning.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        lblTempFilesWarning.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                lblTempFilesWarningMouseClicked(evt);
+            }
+        });
+
+        cmbDownloadMails.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
+        cmbDownloadMails.setToolTipText("Menge der angezeigten Nachrichten beschränken");
+        cmbDownloadMails.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cmbDownloadMailsActionPerformed(evt);
+            }
+        });
+
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(layout.createSequentialGroup()
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
                 .addContainerGap()
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(mainSplitter)
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
+                    .add(layout.createSequentialGroup()
+                        .add(chkMoveToImported)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .add(lblTempFilesWarning))
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, mainSplitter)
+                    .add(layout.createSequentialGroup()
                         .add(cmdRefresh)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(cmdLogout)
@@ -1403,7 +1404,8 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                         .add(jLabel18)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(lblPanelTitle)
-                        .add(0, 0, Short.MAX_VALUE)))
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .add(cmbDownloadMails, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -1412,13 +1414,18 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING, false)
-                        .add(lblPanelTitle, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                         .add(jLabel18, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .add(jToolBar1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .add(jToolBar1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .add(org.jdesktop.layout.GroupLayout.TRAILING, lblPanelTitle, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .add(cmbDownloadMails))
                     .add(cmdRefresh)
                     .add(cmdLogout))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(mainSplitter, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 439, Short.MAX_VALUE)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(chkMoveToImported)
+                    .add(lblTempFilesWarning))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(mainSplitter, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 411, Short.MAX_VALUE)
                 .addContainerGap())
         );
     }// </editor-fold>//GEN-END:initComponents
@@ -1428,12 +1435,11 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             this.reset(true);
         } catch (Exception ex) {
             log.error(ex);
-            ex.printStackTrace();
         }
     }//GEN-LAST:event_cmdRefreshActionPerformed
 
     private void treeFoldersValueChanged(javax.swing.event.TreeSelectionEvent evt) {//GEN-FIRST:event_treeFoldersValueChanged
-        this.treeFoldersValueChangedImpl(evt, 6, -1);
+        this.treeFoldersValueChangedImpl(evt, 4, -1);
     }//GEN-LAST:event_treeFoldersValueChanged
 
     private void treeFoldersValueChangedImpl(javax.swing.event.TreeSelectionEvent evt, int sortCol, int scrollToRow) {
@@ -1459,20 +1465,11 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             mainSplitter.setRightComponent(this.splitterFolderDetails);
             org.jlawyer.bea.model.Folder folder = (org.jlawyer.bea.model.Folder) selNode.getUserObject();
 
-            //EditorsRegistry.getInstance().updateStatus("Öffne Ordner " + folder.getName(), true);
             try {
-//                DefaultTableModel tm = new DefaultTableModel(new String[]{"eEB", "dringend", "vertraulich", "prüfen", "Betreff", "Absender", "Empfänger", "Gesendet", "Az", "Az (Justiz)"}, 0) {
-//
-//                    @Override
-//                    public boolean isCellEditable(int row, int column) {
-//                        //all cells false
-//                        return false;
-//                    }
-//                };
 
                 DefaultTableModel tm = null;
-                if (folder.getType() == Folder.TYPE_TRASH) {
-                    tm = new DefaultTableModel(new String[]{"", "", "", "Betreff", "Absender", "Empfänger", "Datum", "Az Absender", "Az Empfänger", "permant gelöscht"}, 0) {
+                if (Folder.TYPE_TRASH.equals(folder.getType())) {
+                    tm = new DefaultTableModel(new String[]{"", "Betreff", "Absender", "Empfänger", "Datum", "Az Absender", "Az Empfänger", "permant gelöscht"}, 0) {
 
                         @Override
                         public boolean isCellEditable(int row, int column) {
@@ -1481,7 +1478,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                         }
                     };
                 } else {
-                    tm = new DefaultTableModel(new String[]{"", "", "", "Betreff", "Absender", "Empfänger", "Datum", "Az Absender", "Az Empfänger"}, 0) {
+                    tm = new DefaultTableModel(new String[]{"", "Betreff", "Absender", "Empfänger", "Datum", "Az Absender", "Az Empfänger"}, 0) {
 
                         @Override
                         public boolean isCellEditable(int row, int column) {
@@ -1492,19 +1489,18 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                 }
 
                 this.tblMails.setModel(tm);
-                TableRowSorter<TableModel> sorter = new TableRowSorter<TableModel>(tm);
-                sorter.setComparator(6, new DescendingDateTimeStringComparator());
+                TableRowSorter<TableModel> sorter = new TableRowSorter<>(tm);
+                sorter.setComparator(4, new DescendingDateTimeStringComparator());
                 this.tblMails.setRowSorter(sorter);
                 this.tblMails.setDefaultRenderer(Object.class, new BeaMessageTableCellRenderer());
 
-//            new Thread(new LoadFolderEmailsThread(folder, tblMails)).start();
                 ProgressIndicator dlg = new ProgressIndicator(EditorsRegistry.getInstance().getMainWindow(), true);
-                LoadBeaFolderAction a = new LoadBeaFolderAction(dlg, folder, tblMails, sortCol, scrollToRow);
+                LoadBeaFolderAction a = new LoadBeaFolderAction(dlg, folder, tblMails, sortCol, scrollToRow, this.mainSplitter);
                 a.start();
 
             } catch (Exception ex) {
                 log.error("Error getting contents of folder", ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Öffnen des beA - Ordners: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Fehler beim Öffnen des beA - Ordners: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                 EditorsRegistry.getInstance().clearStatus();
             }
         } else if (selNode.getUserObject() != null && selNode.getUserObject() instanceof org.jlawyer.bea.model.Identity) {
@@ -1512,8 +1508,6 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             IdentityPanel ip = new IdentityPanel();
             ip.setIdentity(i);
             mainSplitter.setRightComponent(ip);
-        } else {
-            // do nothing
         }
     }
 
@@ -1538,43 +1532,36 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             this.cmdReplyAll.setEnabled(false);
         }
 
-        if (evt.getClickCount() == 1 && evt.getButton() == evt.BUTTON1) {
+        if (evt.getClickCount() == 1 && evt.getButton() == MouseEvent.BUTTON1) {
             this.displayMessage();
-        } else if (evt.getClickCount() == 2 && evt.getButton() == evt.BUTTON1) {
+        } else if (evt.getClickCount() == 2 && evt.getButton() == MouseEvent.BUTTON1) {
             if (this.tblMails.getSelectedRow() < 0) {
                 this.beaMessageContentUI.clear();
                 this.pnlActionsChild.removeAll();
                 return;
             }
 
-            MessageHeader msgC = (MessageHeader) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 3);
+            MessageHeader msgC = (MessageHeader) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 1);
             Message msg = null;
             try {
                 msg = BeaAccess.getInstance().getMessage(msgC.getId(), BeaAccess.getInstance().getLoggedInSafeId());
             } catch (Exception ex) {
                 log.error(ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Laden der Nachricht: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Fehler beim Laden der Nachricht: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
             if (msg.getProcessCard() == null) {
-                // check whether it is a message sent from any local postbox
-                String senderSafeId = msg.getSenderSafeId();
                 ProcessCard pc = null;
                 try {
-                    Collection<PostBox> inboxes = BeaAccess.getInstance().getPostBoxes();
-                    for (PostBox pb : inboxes) {
-                        if (senderSafeId.equals(pb.getSafeId())) {
-                            pc = BeaAccess.getInstance().getProcessCards(senderSafeId, Long.parseLong(msgC.getId()));
-                            msg.setProcessCard(pc);
-                        }
-                    }
+                    pc = BeaAccess.getInstance().getProcessCards(Long.parseLong(msgC.getId()));
+                    msg.setProcessCard(pc);
                 } catch (Throwable t) {
                     log.error("Error getting process card", t);
                 }
             }
 
-            ViewBeaDialog view = new ViewBeaDialog(EditorsRegistry.getInstance().getMainWindow(), false, null);
+            ViewBeaDialog view = new ViewBeaDialog(EditorsRegistry.getInstance().getMainWindow(), null);
             view.setMessage(msg);
 
             try {
@@ -1625,13 +1612,12 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             org.jlawyer.bea.model.Folder newFolder = bea.addFolder(newNameObject.toString(), f.getId());
 
             SortedBeaFolderNode newTn = new SortedBeaFolderNode(newFolder);
-            //tn.add(newTn);
             DefaultTreeModel dm = (DefaultTreeModel) this.treeFolders.getModel();
             dm.insertNodeInto(newTn, tn, 0);
 
         } catch (Exception ex) {
             log.error(ex);
-            JOptionPane.showMessageDialog(this, "Ordner anlegen fehlgeschlagen: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Ordner anlegen fehlgeschlagen: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
 
         }
 
@@ -1684,7 +1670,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                 }
             } catch (Exception ex) {
                 log.error(ex);
-                JOptionPane.showMessageDialog(this, "Ordner konnte nicht gelöscht werden: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Ordner konnte nicht gelöscht werden: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
 
             }
         }
@@ -1695,7 +1681,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         if (evt.isPopupTrigger()) {
             DefaultMutableTreeNode tn = (DefaultMutableTreeNode) this.treeFolders.getSelectionPath().getLastPathComponent();
             org.jlawyer.bea.model.Folder tf = (org.jlawyer.bea.model.Folder) tn.getUserObject();
-            if (tf.getType().equals(tf.TYPE_TRASH)) {
+            if (tf.getType().equals(Folder.TYPE_TRASH)) {
                 this.mnuRestoreFromTrash.setEnabled(true);
             } else {
                 this.mnuRestoreFromTrash.setEnabled(false);
@@ -1708,8 +1694,6 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         int[] selected = this.tblMails.getSelectedRows();
         int scrollToRow = -1;
         if (!(selected.length > 0)) {
-            //org.jlawyer.bea.model.Message m = (org.jlawyer.bea.model.Message) this.tblMails.getValueAt(selected[0], 0);
-
             return;
 
         }
@@ -1717,19 +1701,19 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         scrollToRow = tblMails.getSelectedRow();
         for (int i = selected.length - 1; i > -1; i--) {
 
-            org.jlawyer.bea.model.MessageHeader mh = (org.jlawyer.bea.model.MessageHeader) this.tblMails.getValueAt(selected[i], 3);
+            org.jlawyer.bea.model.MessageHeader mh = (org.jlawyer.bea.model.MessageHeader) this.tblMails.getValueAt(selected[i], 1);
             try {
                 BeaAccess bea = BeaAccess.getInstance();
 
                 DefaultMutableTreeNode tn = (DefaultMutableTreeNode) this.treeFolders.getSelectionPath().getLastPathComponent();
                 org.jlawyer.bea.model.Folder tf = (org.jlawyer.bea.model.Folder) tn.getUserObject();
-                if (tf.getType().equals(tf.TYPE_TRASH)) {
-                    boolean deleted = bea.deleteMessage(mh.getId());
+                if (tf.getType().equals(Folder.TYPE_TRASH)) {
+                    boolean deleted = bea.deleteMessage(mh);
                     if (deleted) {
                         ((DefaultTableModel) this.tblMails.getModel()).removeRow(this.tblMails.convertRowIndexToModel(selected[i]));
                     }
                 } else {
-                    boolean moved = bea.moveMessageToTrash(mh.getId());
+                    boolean moved = bea.moveMessageToTrash(mh);
                     if (moved) {
                         ((DefaultTableModel) this.tblMails.getModel()).removeRow(this.tblMails.convertRowIndexToModel(selected[i]));
                     }
@@ -1737,7 +1721,6 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
             } catch (Throwable ex) {
                 log.error(ex);
-                ex.printStackTrace();
             }
         }
 
@@ -1760,38 +1743,35 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         DefaultMutableTreeNode tn = (DefaultMutableTreeNode) this.treeFolders.getSelectionPath().getLastPathComponent();
         org.jlawyer.bea.model.Folder tf = (org.jlawyer.bea.model.Folder) tn.getUserObject();
 
-        if (!(tf.getType().equals(tf.TYPE_TRASH))) {
+        if (!(tf.getType().equals(Folder.TYPE_TRASH))) {
             return;
         }
 
         try {
             BeaAccess bea = BeaAccess.getInstance();
-            ArrayList<MessageHeader> all = new ArrayList(bea.getFolderOverview(tf));
+            ArrayList<MessageHeader> all = new ArrayList<>(bea.getFolderOverview(tf, BeaAccess.getFilter()));
             int failed = 0;
             String lastFailure = "";
             for (int i = 0; i < all.size(); i++) {
                 try {
                     org.jlawyer.bea.model.MessageHeader m = all.get(i);
                     EditorsRegistry.getInstance().updateStatus("Lösche Nachricht " + (i + 1) + " von " + all.size() + "...", true);
-                    bea.deleteMessage(m.getId());
+                    bea.deleteMessage(m);
                 } catch (Throwable t) {
                     log.error(t);
                     failed++;
                     lastFailure = t.getMessage();
                 }
             }
-            // change: only expunge in LoadFolderAction before loading messages
-            //tf.expunge();
-//            this.tblMails.setModel(new DefaultTableModel(new String[]{"eEB", "dringend", "vertraulich", "prüfen", "Betreff", "Absender", "Empfänger", "Gesendet", "Az", "Az (Justiz)", "dringend", "vertraulich", "prüfen"}, 0));
             this.tblMails.setModel(new DefaultTableModel(new String[]{"", "", "", "Betreff", "Absender", "Empfänger", "Datum", "Az Absender", "Az Empfänger"}, 0));
 
             if (failed > 0) {
-                JOptionPane.showMessageDialog(this, "" + failed + " Vorgänge fehlgeschlagen, letzte Meldung: " + lastFailure, "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "" + failed + " Vorgänge fehlgeschlagen, letzte Meldung: " + lastFailure, com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             }
 
             EditorsRegistry.getInstance().clearStatus();
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Papierkorb konnte nicht geleert werden: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Papierkorb konnte nicht geleert werden: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             EditorsRegistry.getInstance().clearStatus();
         }
 
@@ -1809,7 +1789,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
         int[] selected = this.tblMails.getSelectedRows();
 
-        org.jlawyer.bea.model.MessageHeader mh = (org.jlawyer.bea.model.MessageHeader) this.tblMails.getValueAt(selected[0], 3);
+        org.jlawyer.bea.model.MessageHeader mh = (org.jlawyer.bea.model.MessageHeader) this.tblMails.getValueAt(selected[0], 1);
         try {
             Message m = BeaAccess.getInstance().getMessage(mh.getId(), BeaAccess.getInstance().getLoggedInSafeId());
 
@@ -1836,7 +1816,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
         } catch (BeaWrapperException ex) {
             log.error(ex);
-            JOptionPane.showMessageDialog(this, "Nachricht nicht gesendet: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Nachricht nicht gesendet: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
         FrameUtils.centerDialog(dlg, null);
@@ -1851,7 +1831,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
     private void mnuSearchSaveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_mnuSearchSaveActionPerformed
 
-        this.saveToCase(null, true, false, false);
+        this.saveToCaseCallback(null, true, false, false);
 
     }//GEN-LAST:event_mnuSearchSaveActionPerformed
 
@@ -1859,7 +1839,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         if (evt.isPopupTrigger()) {
             DefaultMutableTreeNode tn = (DefaultMutableTreeNode) this.treeFolders.getSelectionPath().getLastPathComponent();
             org.jlawyer.bea.model.Folder tf = (org.jlawyer.bea.model.Folder) tn.getUserObject();
-            if (tf.getType().equals(tf.TYPE_TRASH)) {
+            if (tf.getType().equals(Folder.TYPE_TRASH)) {
                 this.mnuRestoreFromTrash.setEnabled(true);
             } else {
                 this.mnuRestoreFromTrash.setEnabled(false);
@@ -1874,9 +1854,8 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         int[] selected = this.tblMails.getSelectedRows();
 
         try {
-            MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(selected[0], 3);
+            MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(selected[0], 1);
             Message m = BeaAccess.getInstance().getMessage(mh.getId(), BeaAccess.getInstance().getLoggedInSafeId());
-            String fromSafeId = m.getSenderSafeId();
 
             String azSender = m.getReferenceNumber();
             String azRecipient = m.getReferenceJustice();
@@ -1893,7 +1872,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             dlg.setSubject(subject);
 
             dlg.setBody(BeaUtils.getQuotedBody(this.beaMessageContentUI.getBody(), m.getSenderName()));
-            
+
             for (Attachment att : m.getAttachments()) {
                 byte[] data = att.getContent();
                 if (data != null) {
@@ -1907,7 +1886,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             dlg.setVisible(true);
         } catch (Exception ex) {
             log.error(ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Laden der Nachricht: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden der Nachricht: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_cmdForwardActionPerformed
 
@@ -1916,7 +1895,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
         int[] selected = this.tblMails.getSelectedRows();
 
-        org.jlawyer.bea.model.MessageHeader mh = (org.jlawyer.bea.model.MessageHeader) this.tblMails.getValueAt(selected[0], 3);
+        org.jlawyer.bea.model.MessageHeader mh = (org.jlawyer.bea.model.MessageHeader) this.tblMails.getValueAt(selected[0], 1);
         try {
             Message m = null;
             try {
@@ -1954,7 +1933,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
         } catch (Exception ex) {
             log.error(ex);
-            JOptionPane.showMessageDialog(this, "Nachricht nicht gesendet: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Nachricht nicht gesendet: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
         FrameUtils.centerDialog(dlg, null);
@@ -1963,25 +1942,11 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
     private void mnuSearchSaveNoAttachmentsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_mnuSearchSaveNoAttachmentsActionPerformed
 
-        this.saveToCase(null, false, false, false);
+        this.saveToCaseCallback(null, false, false, false);
 
     }//GEN-LAST:event_mnuSearchSaveNoAttachmentsActionPerformed
 
-    private void chkCaseTaggingActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_chkCaseTaggingActionPerformed
-        ClientSettings settings = ClientSettings.getInstance();
-
-        boolean tagging = this.chkCaseTagging.isSelected();
-        settings.setConfiguration(ClientSettings.CONF_BEA_TAGGINGENABLED, "" + tagging);
-    }//GEN-LAST:event_chkCaseTaggingActionPerformed
-
-    private void cmbCaseTagActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmbCaseTagActionPerformed
-        ClientSettings settings = ClientSettings.getInstance();
-
-        String lastTag = this.cmbCaseTag.getSelectedItem().toString();
-        settings.setConfiguration(ClientSettings.CONF_BEA_LASTTAG, lastTag);
-    }//GEN-LAST:event_cmbCaseTagActionPerformed
-
-    private void cmdLogoutActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdLogoutActionPerformed
+    public void logout() {
         try {
             BeaAccess.getInstance().logout();
             this.emptyView();
@@ -1989,41 +1954,27 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         } catch (BeaWrapperException ex) {
             log.error("beA logout failed", ex);
         }
+    }
+
+    private void cmdLogoutActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdLogoutActionPerformed
+        this.logout();
     }//GEN-LAST:event_cmdLogoutActionPerformed
-
-    private void chkDocumentTaggingActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_chkDocumentTaggingActionPerformed
-        ClientSettings settings = ClientSettings.getInstance();
-
-        boolean tagging = this.chkDocumentTagging.isSelected();
-        settings.setConfiguration(ClientSettings.CONF_BEA_DOCUMENTTAGGINGENABLED, "" + tagging);
-    }//GEN-LAST:event_chkDocumentTaggingActionPerformed
-
-    private void cmbDocumentTagActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmbDocumentTagActionPerformed
-        ClientSettings settings = ClientSettings.getInstance();
-
-        String lastTag = this.cmbDocumentTag.getSelectedItem().toString();
-        settings.setConfiguration(ClientSettings.CONF_BEA_LASTDOCUMENTTAG, lastTag);
-    }//GEN-LAST:event_cmbDocumentTagActionPerformed
 
     private void mnuRestoreFromTrashActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_mnuRestoreFromTrashActionPerformed
         int[] selected = this.tblMails.getSelectedRows();
         int scrollToRow = -1;
-//        if (!(selected.length > 0)) {
-//            return;
-//
-//        }
 
         scrollToRow = tblMails.getSelectedRow();
         for (int i = selected.length - 1; i > -1; i--) {
 
-            org.jlawyer.bea.model.MessageHeader mh = (org.jlawyer.bea.model.MessageHeader) this.tblMails.getValueAt(selected[i], 3);
+            org.jlawyer.bea.model.MessageHeader mh = (org.jlawyer.bea.model.MessageHeader) this.tblMails.getValueAt(selected[i], 1);
             try {
                 BeaAccess bea = BeaAccess.getInstance();
 
                 DefaultMutableTreeNode tn = (DefaultMutableTreeNode) this.treeFolders.getSelectionPath().getLastPathComponent();
                 org.jlawyer.bea.model.Folder tf = (org.jlawyer.bea.model.Folder) tn.getUserObject();
-                if (tf.getType().equals(tf.TYPE_TRASH)) {
-                    boolean restored = bea.restoreMessageFromTrash(mh.getId());
+                if (tf.getType().equals(Folder.TYPE_TRASH)) {
+                    boolean restored = bea.restoreMessageFromTrash(mh);
                     if (restored) {
                         ((DefaultTableModel) this.tblMails.getModel()).removeRow(this.tblMails.convertRowIndexToModel(selected[i]));
                     }
@@ -2033,7 +1984,6 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
             } catch (Throwable ex) {
                 log.error(ex);
-                ex.printStackTrace();
             }
         }
 
@@ -2052,7 +2002,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
     }//GEN-LAST:event_mnuRestoreFromTrashActionPerformed
 
     private void mnuSearchSaveOnlyAttachmentsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_mnuSearchSaveOnlyAttachmentsActionPerformed
-        this.saveToCase(null, false, false, true);
+        this.saveToCaseCallback(null, false, false, true);
     }//GEN-LAST:event_mnuSearchSaveOnlyAttachmentsActionPerformed
 
     private void chkMoveToImportedActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_chkMoveToImportedActionPerformed
@@ -2062,58 +2012,111 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         settings.setConfiguration(ClientSettings.CONF_BEA_MOVETOIMPORTEDENABLED, "" + move);
     }//GEN-LAST:event_chkMoveToImportedActionPerformed
 
+    private void lblTempFilesWarningMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lblTempFilesWarningMouseClicked
+        try {
+            Desktop.getDesktop().open(new File(BeaAccess.getTempFolder()));
+        } catch (Throwable t) {
+            log.error("Could not open file explorer for bea temp folder " + BeaAccess.getTempFolder(), t);
+            JOptionPane.showMessageDialog(this, "Verzeichnis kann nicht geöffnet werden: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+        }
+    }//GEN-LAST:event_lblTempFilesWarningMouseClicked
+
+    private void mnuMarkReadActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_mnuMarkReadActionPerformed
+        int[] selected = this.tblMails.getSelectedRows();
+        try {
+            for (int sel : selected) {
+                MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(sel, 1);
+                BeaAccess.getInstance().setMessageReadByUser(mh);
+                mh.setRead(true);
+                this.tblMails.setValueAt(mh, sel, 1);
+            }
+        } catch (Throwable t) {
+            log.error("Could not mark message(s) as read", t);
+            JOptionPane.showMessageDialog(this, "Fehler beim Markieren der Nachricht(en): " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+        }
+    }//GEN-LAST:event_mnuMarkReadActionPerformed
+
+    private void cmbDownloadMailsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmbDownloadMailsActionPerformed
+        if (!this.initializing) {
+
+            if (this.cmbDownloadMails.getSelectedItem() == null) {
+                return;
+            }
+
+            ClientSettings cs = ClientSettings.getInstance();
+            cs.setConfiguration(ClientSettings.CONF_BEA_DOWNLOADRESTRICTION, "" + ((LoadFolderRestriction) this.cmbDownloadMails.getSelectedItem()).getRestriction());
+
+            int scrollToRow = tblMails.getSelectedRow();
+            int sortCol = -1;
+            List<? extends SortKey> sortKeys = this.tblMails.getRowSorter().getSortKeys();
+            if (sortKeys != null) {
+                if (!sortKeys.isEmpty()) {
+                    sortCol = sortKeys.get(0).getColumn();
+                }
+            }
+            this.treeFoldersValueChangedImpl(new TreeSelectionEvent(this.tblMails, this.treeFolders.getSelectionPath(), false, null, null), sortCol, scrollToRow);
+        }
+    }//GEN-LAST:event_cmbDownloadMailsActionPerformed
+
     private void displayMessage() {
 
+        this.beaMessageContentUI.clear();
+        this.beaMessageContentUI.repaint();
+        this.beaMessageContentUI.revalidate();
+
+        this.pnlActionsChild.removeAll();
+        this.pnlActionsChild.repaint();
+        this.pnlActionsChild.revalidate();
+
         if (this.tblMails.getSelectedRow() < 0 || this.tblMails.getSelectedRows().length > 1) {
-            this.beaMessageContentUI.clear();
-            this.pnlActionsChild.removeAll();
             return;
         }
 
-        //int selectionIndex=this.tblMails.convertRowIndexToModel(this.tblMails.getSelectedRow());
         int selectionIndex = this.tblMails.getSelectedRow();
 
-        //MessageContainer msgC = (MessageContainer) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 0);
-        org.jlawyer.bea.model.MessageHeader msgh = (org.jlawyer.bea.model.MessageHeader) this.tblMails.getValueAt(selectionIndex, 3);
+        org.jlawyer.bea.model.MessageHeader msgh = (org.jlawyer.bea.model.MessageHeader) this.tblMails.getValueAt(selectionIndex, 1);
         Message msg = null;
         try {
             BeaAccess bea = BeaAccess.getInstance();
             msg = bea.getMessage(msgh.getId(), bea.getLoggedInSafeId());
         } catch (Exception ex) {
             log.error("Cannot load message " + msgh.getId(), ex);
-            JOptionPane.showMessageDialog(this, "Fehler beim Holen der beA-Nachricht: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Holen der beA-Nachricht: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
             return;
         }
 
         if (msg.getProcessCard() == null) {
-            // check whether it is a message sent from any local postbox
-            String senderSafeId = msg.getSenderSafeId();
             ProcessCard pc = null;
             try {
-                Collection<PostBox> inboxes = BeaAccess.getInstance().getPostBoxes();
-                for (PostBox pb : inboxes) {
-                    if (senderSafeId.equals(pb.getSafeId())) {
-                        pc = BeaAccess.getInstance().getProcessCards(senderSafeId, Long.parseLong(msg.getId()));
-                        msg.setProcessCard(pc);
-                    }
-                }
+                pc = BeaAccess.getInstance().getProcessCards(Long.parseLong(msg.getId()));
+                msg.setProcessCard(pc);
             } catch (Throwable t) {
                 log.error("Error getting process card", t);
             }
         }
 
-        // aktiv bis 03.03.2015
-        //MessageContainer msgC = (MessageContainer) this.tblMails.getModel().getValueAt(this.tblMails.convertRowIndexToModel(selectionIndex), 0);
         this.beaMessageContentUI.setMessage(msg, null);
         this.pnlActionsChild.removeAll();
 
-        ArrayList<Component> actionPanelEntries = new ArrayList<Component>();
+        ArrayList<Component> actionPanelEntries = new ArrayList<>();
         ClientSettings settings = ClientSettings.getInstance();
         try {
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
             AddressServiceRemote ads = locator.lookupAddressServiceRemote();
             ArchiveFileServiceRemote afs = locator.lookupArchiveFileServiceRemote();
-// ((javax.mail.internet.InternetAddress?)msg.getFrom()[0]).getAddress()
+
+            ArrayList<String> phoneNumbers = new ArrayList<>();
+            try {
+                Collection<Keyword> keywords = afs.extractKeywordsFromText(this.beaMessageContentUI.getBody());
+                for (Keyword w : keywords) {
+                    if (w.getType() == Keyword.TYPE_PHONENR) {
+                        phoneNumbers.add(w.getValue());
+                    }
+                }
+            } catch (Throwable t) {
+                log.error("Could not extract keywords from email", t);
+            }
+
             String sender = msg.getSenderSafeId();
             if (sender != null && sender.length() > 0) {
 
@@ -2133,7 +2136,6 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                 CaseForContactEntry cce = new CaseForContactEntry();
                 cce.setFileNumber(null);
                 cce.setId(null);
-                //lce.setRole(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/editors/addresses/CaseForContactEntryPanel").getString("role.client"));
                 cce.setRole("");
                 cce.setName("Akte suchen und zuordnen");
                 cce.setReason(StringUtils.nonEmpty(null));
@@ -2141,17 +2143,21 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                 sp.setEntry(cce, this);
                 actionPanelEntries.add(sp);
 
+                if (phoneNumbers.size() > 0) {
+                    ExtractedPhoneNumbersPanel pnp = new ExtractedPhoneNumbersPanel();
+                    pnp.setPhoneNumbers(phoneNumbers);
+                    actionPanelEntries.add(pnp);
+                }
+
                 if (msg.isEebRequested()) {
                     // sen eEB
                     BeaEebReplyPanel berp = new BeaEebReplyPanel(this.getClass().getName());
-                    //berp.setBackground(new Color(153, 204, 255));
                     berp.setEntry(this);
                     berp.enableButtons(true);
                     actionPanelEntries.add(berp);
                 } else if (msg.hasAttachment("xjustiz_nachricht.xml")) {
                     // received eEB 
                     BeaEebReplyPanel berp = new BeaEebReplyPanel(this.getClass().getName());
-                    //berp.setBackground(new Color(153, 204, 255));
                     berp.setEntry(this);
                     berp.enableButtons(false);
                     actionPanelEntries.add(berp);
@@ -2166,33 +2172,29 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                     Collection caseCol = afs.getArchiveFileAddressesForAddress(h.getId());
                     int i = 0;
                     ArrayList cases = new ArrayList(caseCol);
-                    Collections.sort(cases, new Comparator() {
-                        @Override
-                        public int compare(Object o1, Object o2) {
-                            ArchiveFileAddressesBean afab1 = (ArchiveFileAddressesBean) o1;
-                            ArchiveFileBean aFile1 = afab1.getArchiveFileKey();
+                    Collections.sort(cases, (Object o1, Object o2) -> {
+                        ArchiveFileAddressesBean afab1 = (ArchiveFileAddressesBean) o1;
+                        ArchiveFileBean aFile1 = afab1.getArchiveFileKey();
 
-                            ArchiveFileAddressesBean afab2 = (ArchiveFileAddressesBean) o2;
-                            ArchiveFileBean aFile2 = afab2.getArchiveFileKey();
+                        ArchiveFileAddressesBean afab2 = (ArchiveFileAddressesBean) o2;
+                        ArchiveFileBean aFile2 = afab2.getArchiveFileKey();
 
-                            if (aFile2.getArchivedBoolean()) {
-                                if (aFile1.getArchivedBoolean()) {
-                                    // both archived
-                                    // sort by changed date
-                                    return new FileNumberComparator().compare(aFile1, aFile2) * -1;
-                                } else {
-                                    // only 2 is archived
-                                    return -1;
-                                }
-                            } else if (aFile1.getArchivedBoolean()) {
-                                // only 1 is archived
-                                return 1;
-                            } else {
-                                // both are non-archived
+                        if (aFile2.getArchivedBoolean()) {
+                            if (aFile1.getArchivedBoolean()) {
+                                // both archived
                                 // sort by changed date
                                 return new FileNumberComparator().compare(aFile1, aFile2) * -1;
+                            } else {
+                                // only 2 is archived
+                                return -1;
                             }
-
+                        } else if (aFile1.getArchivedBoolean()) {
+                            // only 1 is archived
+                            return 1;
+                        } else {
+                            // both are non-archived
+                            // sort by changed date
+                            return new FileNumberComparator().compare(aFile1, aFile2) * -1;
                         }
                     });
                     for (Object c : cases) {
@@ -2206,7 +2208,6 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                         CaseForContactEntry lce = new CaseForContactEntry();
                         lce.setFileNumber(aFile.getFileNumber());
                         lce.setId(aFile.getId());
-                        //lce.setRole(java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/editors/addresses/CaseForContactEntryPanel").getString("role.client"));
                         lce.setRole("");
                         lce.setName(aFile.getName());
                         lce.setReason(StringUtils.nonEmpty(aFile.getReason()));
@@ -2215,10 +2216,6 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
                         actionPanelEntries.add(ep);
                         i++;
-//                                if (i == 25) {
-//                                    layout.setRows(i);
-//                                    return;
-//                                }
                     }
 
                 }
@@ -2234,12 +2231,10 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
         } catch (Throwable t) {
             log.error(t);
-            t.printStackTrace();
         }
 
-        this.tblMails.setValueAt(msgh, selectionIndex, 3);
+        this.tblMails.setValueAt(msgh, selectionIndex, 1);
         for (int i = 1; i < this.tblMails.getColumnCount(); i++) {
-            //this.tblMails.setValueAt(this.tblMails.getValueAt(this.tblMails.getSelectedRow(), i), this.tblMails.getSelectedRow(), i);
             this.tblMails.setValueAt(this.tblMails.getValueAt(selectionIndex, i), selectionIndex, i);
         }
 
@@ -2297,7 +2292,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
             MessageHeader[] copyMsg = new MessageHeader[selectedRows.length];
             for (int i = selectedRows.length - 1; i > -1; i--) {
                 int sel = selectedRows[i];
-                copyMsg[i] = (MessageHeader) this.tblMails.getValueAt(sel, 3);
+                copyMsg[i] = (MessageHeader) this.tblMails.getValueAt(sel, 1);
             }
 
             try {
@@ -2307,7 +2302,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                 }
             } catch (Throwable ex) {
                 log.error(ex);
-                JOptionPane.showMessageDialog(this, "Fehler beim Verschieben der beA-Nachricht: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Fehler beim Verschieben der beA-Nachricht: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                 //dtde.rejectDrop();
                 return;
             }
@@ -2347,15 +2342,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
     @Override
     public void dragGestureRecognized(DragGestureEvent dge) {
         int[] sel = this.tblMails.getSelectedRows();
-//        ArrayList transfer=new ArrayList();
-//        
-//        for(int i=0;i<sel.length;i++) {
-//            MessageContainer msgC = (MessageContainer) this.tblMails.getValueAt(sel[i], 0);
-//        
-//            transfer.add(msgC.getMessage());
-//        }
 
-        //dge.startDrag(null, t);
         this.dragSource.startDrag(dge, null, new MessagesTransferable(sel), null);
     }
 
@@ -2368,44 +2355,35 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
     public void reset() {
         this.reset(false);
     }
-    
+
     public void reset(boolean force) {
 
-        boolean needsReset = !BeaAccess.hasInstance();
-        if (!needsReset) {
+        boolean needsBeaReset = !BeaAccess.hasInstance();
+        if (!needsBeaReset) {
             try {
-                needsReset = !BeaAccess.getInstance().isLoggedIn();
+                needsBeaReset = !BeaAccess.getInstance().isLoggedIn();
             } catch (Throwable t) {
                 log.error(t);
-                needsReset = true;
+                needsBeaReset = true;
             }
         }
 
-        if (needsReset) {
+        if (needsBeaReset) {
             BeaLoginDialog loginPanel = new BeaLoginDialog(EditorsRegistry.getInstance().getMainWindow(), true, this);
             loginPanel.setVisible(true);
             if (!BeaAccess.hasInstance()) {
                 return;
             }
         }
-        
-        if(force) {
+
+        if (force) {
             try {
                 this.refreshFolders(true);
             } catch (Throwable t) {
                 log.error("Error during forced refresh: " + t.getMessage(), t);
             }
         }
-        
-        //this.loginSuccess();
-//        BeaLoginDialog loginPanel=new BeaLoginDialog(EditorsRegistry.getInstance().getMainWindow(), true, this);
-//        loginPanel.setVisible(true);
-//        //loginPanel.setBackgroundImage(this.getBackgroundImage());
-//        Container c=this.getParent();
-//        c.remove(this);
-//        c.add(loginPanel);
 
-        //EditorsRegistry.getInstance().setMainEditorsPaneView(loginPanel);
     }
 
     @Override
@@ -2420,181 +2398,162 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
         this.cmdNew.setEnabled(true);
         this.cmdRefresh.setEnabled(true);
         this.initializing = false;
-        //BeaLoginPanel loginPanel=new BeaLoginPanel(this, true);
         this.needsReset = false;
         try {
             Timer t = new Timer();
             TimerTask tt = new TimerTask() {
                 @Override
                 public void run() {
-                    SwingUtilities.invokeLater(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                refreshFolders(true);
-                            } catch (Throwable t) {
-                                log.error(t);
-                                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), t.getMessage(), "Fehler");
-                            }
+                    SwingUtilities.invokeLater(() -> {
+                        try {
+                            refreshFolders(true);
+                        } catch (Throwable t1) {
+                            log.error(t1);
+                            ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), t1.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
                         }
-
                     });
                 }
 
             };
             t.schedule(tt, 100);
-            //this.refreshFolders(true);
         } catch (Throwable t) {
             log.error(t);
-            JOptionPane.showMessageDialog(this, "Fehler beim Laden der beA - Ordner: " + t.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden der beA - Ordner: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
-        return;
     }
 
     @Override
     public void loginFailure(String msg) {
-        ThreadUtils.showErrorDialog(this, "beA-Login fehlgeschlagen: " + msg, "Fehler");
+        ThreadUtils.showErrorDialog(this, "beA-Login fehlgeschlagen: " + msg, com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
         this.cmdRefresh.setEnabled(true);
     }
 
     @Override
-    public void onEvent(Event e) {
-        if (e instanceof AllCaseTagsEvent) {
-            DefaultComboBoxModel dm = new DefaultComboBoxModel();
-            dm.addElement("");
-            ArrayList<String> allTags = new ArrayList<String>();
-            for (AppOptionGroupBean tag : ((AllCaseTagsEvent) e).getTagDtos()) {
-                //dm.addElement(tag.getValue());
-                allTags.add(tag.getValue());
-            }
-            Collections.sort(allTags);
-            for (String s : allTags) {
-                dm.addElement(s);
-            }
-            this.cmbCaseTag.setModel(dm);
-            ClientSettings settings = ClientSettings.getInstance();
-            String lastTag = settings.getConfiguration(ClientSettings.CONF_BEA_LASTTAG, "");
-            if (allTags.contains(lastTag)) {
-                this.cmbCaseTag.setSelectedItem(lastTag);
-            } else {
-                this.cmbCaseTag.setSelectedItem("");
-            }
-        } else if (e instanceof AllDocumentTagsEvent) {
-            DefaultComboBoxModel dm = new DefaultComboBoxModel();
-            dm.addElement("");
-            ArrayList<String> allTags = new ArrayList<String>();
-            for (AppOptionGroupBean tag : ((AllDocumentTagsEvent) e).getTagDtos()) {
-                //dm.addElement(tag.getValue());
-                allTags.add(tag.getValue());
-            }
-            Collections.sort(allTags);
-            for (String s : allTags) {
-                dm.addElement(s);
-            }
-            this.cmbDocumentTag.setModel(dm);
-            ClientSettings settings = ClientSettings.getInstance();
-            String lastTag = settings.getConfiguration(ClientSettings.CONF_BEA_LASTDOCUMENTTAG, "");
-            if (allTags.contains(lastTag)) {
-                this.cmbDocumentTag.setSelectedItem(lastTag);
-            } else {
-                this.cmbDocumentTag.setSelectedItem("");
-            }
-        }
-    }
-
-    @Override
-    public boolean saveToCase(String caseId, boolean withAttachments, boolean separateAttachments, boolean attachmentsOnly) {
+    public boolean saveToCaseCallback(String caseId, boolean withAttachments, boolean separateAttachments, boolean attachmentsOnly) {
         if (this.tblMails.getSelectedRowCount() == 1) {
-            ClientSettings settings = ClientSettings.getInstance();
-            try {
-                JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-                ArchiveFileServiceRemote afs = locator.lookupArchiveFileServiceRemote();
 
-                MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 3);
+            BulkSaveDialog bulkSaveDlg = new BulkSaveDialog(BulkSaveDialog.TYPE_BEA, EditorsRegistry.getInstance().getMainWindow(), true);
+            bulkSaveDlg.setEntryProcessor(new BeaEntryProcessor());
+            try {
+                MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 1);
                 Message m = BeaAccess.getInstance().getMessage(mh.getId(), BeaAccess.getInstance().getLoggedInSafeId());
                 MessageExport export = null;
                 byte[] data = null;
 
                 if (withAttachments) {
+                    BeaAccess.addSignatureVerification(BeaAccess.getInstance(), m);
                     export = BeaAccess.exportMessage(m);
                     data = export.getContent();
                 } else {
                     Message clone = (Message) m.clone();
                     clone.getAttachments().clear();
+                    clone.getVhnAttachments().clear();
+                    BeaAccess.addSignatureVerification(BeaAccess.getInstance(), clone);
                     export = BeaAccess.exportMessage(clone);
                     data = export.getContent();
                 }
 
+                CaseFolder rootFolder = null;
+                CaseFolder targetFolder = null;
+                ArchiveFileBean targetCase = null;
                 if (caseId == null) {
-                    SearchAndAssignDialog dlg = new SearchAndAssignDialog(EditorsRegistry.getInstance().getMainWindow(), true, ""+m.getReferenceJustice()+m.getReferenceNumber()+m.getSubject()+m.getBody());
+                    SearchAndAssignDialog dlg = new SearchAndAssignDialog(EditorsRegistry.getInstance().getMainWindow(), true, "" + m.getReferenceJustice() + m.getReferenceNumber() + m.getSubject() + m.getBody(), null);
                     dlg.setVisible(true);
-                    ArchiveFileBean sel = dlg.getSelection();
-
+                    targetCase = dlg.getCaseSelection();
+                    targetFolder = dlg.getFolderSelection();
+                    rootFolder = dlg.getRootFolder();
                     dlg.dispose();
-                    if (sel != null) {
-                        caseId = sel.getId();
+                } else {
+                    SearchAndAssignDialog dlg = new SearchAndAssignDialog(EditorsRegistry.getInstance().getMainWindow(), true, "" + m.getReferenceJustice() + m.getReferenceNumber() + m.getSubject() + m.getBody(), caseId);
+                    dlg.setVisible(true);
+                    targetFolder = dlg.getFolderSelection();
+                    targetCase = dlg.getCaseSelection();
+                    rootFolder = dlg.getRootFolder();
+                    dlg.dispose();
+                }
+
+                java.util.Date receivedPrefix = m.getReceptionTime();
+                if (receivedPrefix == null) {
+                    receivedPrefix = new java.util.Date();
+                }
+
+                // user hit cancel
+                if (targetCase == null) {
+                    return false;
+                }
+
+                bulkSaveDlg.setCaseFolder(rootFolder, targetFolder);
+                bulkSaveDlg.setSelectedCase(targetCase);
+
+                if (attachmentsOnly && targetCase != null) {
+
+                    for (Attachment att : m.getAttachments()) {
+
+                        BulkSaveEntry bulkEntry = new BulkSaveEntry();
+                        bulkEntry.setDocumentDate(m.getReceptionTime());
+
+                        String attachmentName = att.getFileName();
+                        byte[] attachmentData = att.getContent();
+                        bulkEntry.setDocumentBytes(attachmentData);
+
+                        String newName = attachmentName;
+                        if (newName == null) {
+                            newName = "";
+                        }
+                        // file names need to be unique across the entire case, so when saving multiple
+                        // beA messages, there are multiple xjustiz sds
+                        if (newName.equalsIgnoreCase("xjustiz_nachricht.xml")) {
+                            newName = m.getId() + "_" + newName;
+                        }
+                        newName = FileUtils.sanitizeFileName(newName);
+
+                        if (newName.trim().length() == 0) {
+                            newName = "Anhang";
+                        }
+
+                        bulkEntry.setDocumentFilename(attachmentName);
+                        bulkEntry.setDocumentFilenameNew(FileUtils.getNewFileNamePrefix(receivedPrefix) + newName);
+
+                        bulkSaveDlg.addEntry(bulkEntry);
+
+                    }
+
+                    for (Attachment att : m.getVhnAttachments()) {
+                        BulkSaveEntry bulkEntry = new BulkSaveEntry();
+                        bulkEntry.setDocumentDate(m.getReceptionTime());
+
+                        String attachmentName = att.getFileName();
+                        byte[] attachmentData = att.getContent();
+                        bulkEntry.setDocumentBytes(attachmentData);
+
+                        String newName = attachmentName;
+                        if (newName == null) {
+                            newName = "";
+                        }
+
+                        // file names need to be unique across the entire case, so when saving multiple
+                        // beA messages, there are multiple xjustiz sds
+                        if (newName.equalsIgnoreCase("vhn.xml") || newName.equalsIgnoreCase("vhn.xml.p7s")) {
+                            newName = m.getId() + "_" + newName;
+                        }
+                        newName = FileUtils.sanitizeFileName(newName);
+
+                        if (newName.trim().length() == 0) {
+                            newName = "VHN-Anhang";
+                        }
+
+                        bulkEntry.setDocumentFilename(attachmentName);
+                        bulkEntry.setDocumentFilenameNew(FileUtils.getNewFileNamePrefix(receivedPrefix) + newName);
+
+                        bulkSaveDlg.addEntry(bulkEntry);
                     }
                 }
 
-                if (attachmentsOnly) {
-                    if (caseId != null) {
+                if (targetCase != null && !attachmentsOnly) {
 
-                        String temp = ClientSettings.getInstance().getConfiguration(ClientSettings.CONF_BEA_TAGGINGENABLED, "false");
-                        if ("true".equalsIgnoreCase(temp)) {
-                            String caseTag = ClientSettings.getInstance().getConfiguration(ClientSettings.CONF_BEA_LASTTAG, "");
-                            if (caseTag != null && !"".equalsIgnoreCase(caseTag)) {
-                                afs.setTag(caseId, new ArchiveFileTagsBean(null, caseTag), true);
-                            }
-                        }
-
-                        for (Attachment att : m.getAttachments()) {
-                            String attachmentName = att.getFileName();
-                            byte[] attachmentData = att.getContent();
-                            String newName = attachmentName;
-                            if (newName == null) {
-                                newName = "";
-                            }
-                            newName = FileUtils.sanitizeFileName(newName);
-                            java.util.Date receivedPrefix = m.getReceptionTime();
-                            if (receivedPrefix == null) {
-                                receivedPrefix = new java.util.Date();
-                            }
-                            String formerName = newName;
-                            newName = FileUtils.getNewFileName(newName, true, receivedPrefix);
-                            if (newName == null) {
-                                // user may have decided to skip this attachment - continue with next
-                                continue;
-                            }
-                            newName = FileUtils.preserveExtension(formerName, newName);
-                            newName = FileUtils.sanitizeFileName(newName);
-
-                            if (newName.trim().length() == 0) {
-                                newName = "Anhang";
-                            }
-
-                            ArchiveFileDocumentsBean newlyAddedDocument = afs.addDocument(caseId, newName, attachmentData, "");
-
-                            temp = ClientSettings.getInstance().getConfiguration(ClientSettings.CONF_BEA_DOCUMENTTAGGINGENABLED, "false");
-                            if ("true".equalsIgnoreCase(temp)) {
-                                String docTag = ClientSettings.getInstance().getConfiguration(ClientSettings.CONF_BEA_LASTDOCUMENTTAG, "");
-                                if (docTag != null && !"".equalsIgnoreCase(docTag)) {
-                                    afs.setDocumentTag(newlyAddedDocument.getId(), new DocumentTagsBean(newlyAddedDocument.getId(), docTag), true);
-                                }
-                            }
-                        }
-
-                    }
-                }
-
-                if (caseId != null && !attachmentsOnly) {
-
-                    java.util.Date receivedPrefix = m.getReceptionTime();
-                    if (receivedPrefix == null) {
-                        receivedPrefix = new java.util.Date();
-                    }
-                    String newName = FileUtils.getNewFileName(export.getFileName(), true, receivedPrefix);
+                    String newName = export.getFileName();
                     if (newName == null) {
-                        return false;
+                        newName = "";
                     }
 
                     if (newName.trim().length() == 0) {
@@ -2604,27 +2563,18 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                     if (!newName.toLowerCase().endsWith(".bea")) {
                         newName = newName + ".bea";
                     }
+                    newName = FileUtils.sanitizeFileName(newName);
 
-                    ArchiveFileDocumentsBean newlyAddedDocument = afs.addDocument(caseId, newName, export.getContent(), "");
-
-                    String temp = ClientSettings.getInstance().getConfiguration(ClientSettings.CONF_BEA_TAGGINGENABLED, "false");
-                    if ("true".equalsIgnoreCase(temp)) {
-                        String caseTag = ClientSettings.getInstance().getConfiguration(ClientSettings.CONF_BEA_LASTTAG, "");
-                        if (caseTag != null && !"".equalsIgnoreCase(caseTag)) {
-                            afs.setTag(caseId, new ArchiveFileTagsBean(null, caseTag), true);
-                        }
-                    }
-                    temp = ClientSettings.getInstance().getConfiguration(ClientSettings.CONF_BEA_DOCUMENTTAGGINGENABLED, "false");
-                    if ("true".equalsIgnoreCase(temp)) {
-                        String docTag = ClientSettings.getInstance().getConfiguration(ClientSettings.CONF_BEA_LASTDOCUMENTTAG, "");
-                        if (docTag != null && !"".equalsIgnoreCase(docTag)) {
-                            afs.setDocumentTag(newlyAddedDocument.getId(), new DocumentTagsBean(newlyAddedDocument.getId(), docTag), true);
-                        }
-                    }
+                    BulkSaveEntry bulkEntry = new BulkSaveEntry();
+                    bulkEntry.setDocumentDate(m.getReceptionTime());
+                    bulkEntry.setDocumentBytes(data);
+                    bulkEntry.setDocumentFilename(newName);
+                    bulkEntry.setDocumentFilenameNew(FileUtils.getNewFileNamePrefix(receivedPrefix) + m.getId() + "_" + newName);
+                    bulkSaveDlg.addEntry(bulkEntry);
 
                 }
 
-                if (caseId != null && separateAttachments && !attachmentsOnly) {
+                if (targetCase != null && separateAttachments && !attachmentsOnly) {
                     for (Attachment att : m.getAttachments()) {
                         String attachmentName = att.getFileName();
                         byte[] attachmentData = att.getContent();
@@ -2632,31 +2582,63 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                         if (newName == null) {
                             newName = "";
                         }
-                        newName = FileUtils.sanitizeFileName(newName);
-                        java.util.Date receivedPrefix = m.getReceptionTime();
-                        if (receivedPrefix == null) {
-                            receivedPrefix = new java.util.Date();
+                        // file names need to be unique across the entire case, so when saving multiple
+                        // beA messages, there are multiple xjustiz sds
+                        if (newName.equalsIgnoreCase("xjustiz_nachricht.xml")) {
+                            newName = m.getId() + "_" + newName;
                         }
-                        String formerName = newName;
-                        newName = FileUtils.getNewFileName(newName, true, receivedPrefix);
-                        if (newName == null) {
-                            // user may have decided to skip this attachment - continue with next
-                            continue;
-                        }
-                        newName = FileUtils.preserveExtension(formerName, newName);
                         newName = FileUtils.sanitizeFileName(newName);
 
                         if (newName.trim().length() == 0) {
                             newName = "Anhang";
                         }
 
-                        afs.addDocument(caseId, newName, attachmentData, "");
+                        BulkSaveEntry bulkEntry = new BulkSaveEntry();
+                        bulkEntry.setDocumentDate(m.getReceptionTime());
+                        bulkEntry.setDocumentBytes(attachmentData);
+                        bulkEntry.setDocumentFilename(attachmentName);
+                        bulkEntry.setDocumentFilenameNew(FileUtils.getNewFileNamePrefix(receivedPrefix) + newName);
+                        bulkSaveDlg.addEntry(bulkEntry);
+
+                    }
+
+                    for (Attachment att : m.getVhnAttachments()) {
+                        BulkSaveEntry bulkEntry = new BulkSaveEntry();
+                        bulkEntry.setDocumentDate(m.getReceptionTime());
+
+                        String attachmentName = att.getFileName();
+                        byte[] attachmentData = att.getContent();
+                        bulkEntry.setDocumentBytes(attachmentData);
+
+                        String newName = attachmentName;
+                        if (newName == null) {
+                            newName = "";
+                        }
+
+                        // file names need to be unique across the entire case, so when saving multiple
+                        // beA messages, there are multiple xjustiz sds
+                        if (newName.equalsIgnoreCase("vhn.xml") || newName.equalsIgnoreCase("vhn.xml.p7s")) {
+                            newName = m.getId() + "_" + newName;
+                        }
+                        newName = FileUtils.sanitizeFileName(newName);
+
+                        if (newName.trim().length() == 0) {
+                            newName = "VHN-Anhang";
+                        }
+
+                        bulkEntry.setDocumentFilename(attachmentName);
+                        bulkEntry.setDocumentFilenameNew(FileUtils.getNewFileNamePrefix(receivedPrefix) + newName);
+
+                        bulkSaveDlg.addEntry(bulkEntry);
                     }
 
                 }
 
+                FrameUtils.centerDialog(bulkSaveDlg, EditorsRegistry.getInstance().getMainWindow());
+                bulkSaveDlg.setVisible(true);
+
                 String temp = ClientSettings.getInstance().getConfiguration(ClientSettings.CONF_BEA_MOVETOIMPORTEDENABLED, "false");
-                if ("true".equalsIgnoreCase(temp)) {
+                if (targetCase != null && "true".equalsIgnoreCase(temp) && !bulkSaveDlg.isFailedOrCancelled()) {
                     int scrollToRow = tblMails.getSelectedRow();
                     int sortCol = -1;
                     List<? extends SortKey> sortKeys = this.tblMails.getRowSorter().getSortKeys();
@@ -2676,7 +2658,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                             log.error("Unable to refresh beA folder after moving message to imported", t);
                         }
                     } else {
-                        ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Verschieben der beA-Nachricht - Importordner existiert nicht!", "Fehler");
+                        ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Verschieben der beA-Nachricht - Importordner existiert nicht!", com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
                     }
 
                 }
@@ -2685,7 +2667,7 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
             } catch (Exception ex) {
                 log.error(ex);
-                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Speichern der beA-Nachricht: " + ex.getMessage(), "Fehler");
+                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Speichern der beA-Nachricht: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
             }
         }
         return false;
@@ -2694,28 +2676,23 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
     @Override
     public boolean confirmEeb() {
         if (this.tblMails.getSelectedRowCount() == 1) {
-            ClientSettings settings = ClientSettings.getInstance();
             try {
 
-                JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-                ArchiveFileServiceRemote afs = locator.lookupArchiveFileServiceRemote();
-
-                MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 3);
+                MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 1);
                 Collection<PostBox> inboxes = BeaAccess.getInstance().getPostBoxes();
                 String senderSafeId = null;
                 for (PostBox inbox : inboxes) {
-                    for (Recipient r : mh.getRecipients()) {
-                        if (r.getSafeId().equals(inbox.getSafeId())) {
-                            senderSafeId = r.getSafeId();
-                            break;
-                        }
+                    Recipient r = mh.getRecipient();
+                    if (r.getSafeId().equals(inbox.getSafeId())) {
+                        senderSafeId = r.getSafeId();
+                        break;
                     }
                     if (senderSafeId != null) {
                         break;
                     }
                 }
                 if (senderSafeId == null) {
-                    ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Absender-Postfach für eEB kann nicht ermittelt werden.", "Fehler");
+                    ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Absender-Postfach für eEB kann nicht ermittelt werden.", com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
                     return false;
                 }
 
@@ -2731,24 +2708,16 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                             log.error(t);
                         }
 
-//                        if (mh.getSender().equals(inbox.getSafeId()) || mh.getSender().equals(senderName)) {
-//                            ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Ein eEB kann nicht für selbst verschickte Nachrichten abgegeben werden.", "Fehler");
-//                            return false;
-//                        }
                     }
                 }
 
                 JTextField hiddenField = new JTextField();
                 MultiCalDialog dlg = new MultiCalDialog(hiddenField, EditorsRegistry.getInstance().getMainWindow(), true);
                 Calendar c = Calendar.getInstance();
-                c.add(Calendar.DAY_OF_MONTH, 1);
                 dlg.setMaxDate(c.getTime());
                 Calendar c2 = Calendar.getInstance();
                 c2.add(Calendar.MONTH, -2);
                 dlg.setMinDate(c2.getTime());
-//                dlg.setUndecorated(false);
-//                dlg.setTitle("eEB-Abgabedatum wählen:");
-                FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
                 dlg.setVisible(true);
                 Date abgabeDate = null;
                 try {
@@ -2765,16 +2734,14 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                     JOptionPane.showMessageDialog(this, "Eingehende eEB-ID ist leer - eEB bitte über beA im Browser abgeben!", "eEB abgeben", JOptionPane.WARNING_MESSAGE);
                     return false;
                 }
-                ArrayList<String> recipients = new ArrayList<String>();
-                recipients.add(m.getSenderSafeId());
-
-                Message sentMessage = BeaAccess.getInstance().sendEebConfirmation(m, senderSafeId, recipients, abgabeDate);
+                Message sentMessage = BeaAccess.getInstance().sendEebConfirmation(m, senderSafeId, m.getSenderSafeId(), abgabeDate);
+                this.saveEebResponse(sentMessage, mh, "Abgabe");
 
                 return true;
 
             } catch (Exception ex) {
                 log.error(ex);
-                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Senden der eEB-Bestätigung: " + ex.getMessage(), "Fehler");
+                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Senden der eEB-Bestätigung: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
             }
         }
         return false;
@@ -2783,27 +2750,23 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
     @Override
     public boolean rejectEeb() {
         if (this.tblMails.getSelectedRowCount() == 1) {
-            ClientSettings settings = ClientSettings.getInstance();
             try {
-                JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
-                ArchiveFileServiceRemote afs = locator.lookupArchiveFileServiceRemote();
 
-                MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 3);
+                MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 1);
                 Collection<PostBox> inboxes = BeaAccess.getInstance().getPostBoxes();
                 String senderSafeId = null;
                 for (PostBox inbox : inboxes) {
-                    for (Recipient r : mh.getRecipients()) {
-                        if (r.getSafeId().equals(inbox.getSafeId())) {
-                            senderSafeId = r.getSafeId();
-                            break;
-                        }
+                    Recipient r = mh.getRecipient();
+                    if (r.getSafeId().equals(inbox.getSafeId())) {
+                        senderSafeId = r.getSafeId();
+                        break;
                     }
                     if (senderSafeId != null) {
                         break;
                     }
                 }
                 if (senderSafeId == null) {
-                    ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Absender-Postfach für eEB kann nicht ermittelt werden.", "Fehler");
+                    ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Absender-Postfach für eEB kann nicht ermittelt werden.", com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
                     return false;
                 }
 
@@ -2818,11 +2781,6 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                         } catch (Throwable t) {
                             log.error(t);
                         }
-
-//                        if (mh.getSender().equals(inbox.getSafeId()) || mh.getSender().equals(senderName)) {
-//                            ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Ein eEB kann nicht für selbst verschickte Nachrichten verweigert werden.", "Fehler");
-//                            return false;
-//                        }
                     }
                 }
 
@@ -2841,35 +2799,100 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
                 }
 
                 Message m = BeaAccess.getInstance().getMessage(mh.getId(), BeaAccess.getInstance().getLoggedInSafeId());
-                ArrayList<String> recipients = new ArrayList<String>();
-                recipients.add(m.getSenderSafeId());
 
-                Message sentMessage = BeaAccess.getInstance().sendEebRejection(m, senderSafeId, recipients, code, comment);
+                Message sentMessage = BeaAccess.getInstance().sendEebRejection(m, senderSafeId, m.getSenderSafeId(), code, comment);
+                this.saveEebResponse(sentMessage, mh, "Ablehnung");
 
                 return true;
 
             } catch (Exception ex) {
                 log.error(ex);
-                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Senden der eEB-Zurückweisung: " + ex.getMessage(), "Fehler");
+                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Senden der eEB-Zurückweisung: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
             }
         }
         return false;
     }
 
+    private void saveEebResponse(Message m, MessageHeader originalMessage, String rejectionOrConfirmation) {
+
+        try {
+
+            SearchAndAssignDialog dlg = new SearchAndAssignDialog(EditorsRegistry.getInstance().getMainWindow(), true, "" + originalMessage.getReferenceJustice() + originalMessage.getReferenceNumber() + m.getSubject() + m.getBody(), null);
+            dlg.setVisible(true);
+            ArchiveFileBean targetCase = dlg.getCaseSelection();
+            CaseFolder targetFolder = dlg.getFolderSelection();
+            dlg.dispose();
+            
+            // user decided to cancel
+            if(dlg.getCaseSelection()==null)
+                return;
+
+            ClientSettings settings = ClientSettings.getInstance();
+            JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+            ArchiveFileServiceRemote remote = locator.lookupArchiveFileServiceRemote();
+
+            MessageExport mex = BeaAccess.exportMessage(m);
+            String newName = FileUtils.getNewFileName(m.getId() + "_eEb-" + rejectionOrConfirmation + ".bea", false, new Date(), EditorsRegistry.getInstance().getMainWindow(), "eEb-Antwort speichern");
+            if (newName == null || "".equals(newName)) {
+                newName=m.getId() + "_eEb-" + rejectionOrConfirmation + ".bea";
+            }
+            newName = FileUtils.sanitizeFileName(newName);
+            newName = FileUtils.getNewFileNamePrefix(new Date()) + newName;
+            ArchiveFileDocumentsBean newDoc = remote.addDocument(targetCase.getId(), newName, mex.getContent(), "");
+
+            if (targetFolder != null) {
+                ArrayList<String> docId = new ArrayList<>();
+                docId.add(newDoc.getId());
+                remote.moveDocumentsToFolder(docId, targetFolder.getId());
+
+            }
+
+        } catch (Exception ioe) {
+            log.error("Error saving eEb response", ioe);
+            JOptionPane.showMessageDialog(this, "Fehler beim Speichern der eEb-Abgabe: " + ioe.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+        }
+
+    }
+
     @Override
     public boolean displayEeb() {
         if (this.tblMails.getSelectedRowCount() == 1) {
-            ClientSettings settings = ClientSettings.getInstance();
             try {
 
-                MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 3);
+                MessageHeader mh = (MessageHeader) this.tblMails.getValueAt(this.tblMails.getSelectedRow(), 1);
                 Message m = BeaAccess.getInstance().getMessage(mh.getId(), BeaAccess.getInstance().getLoggedInSafeId());
                 for (Attachment att : m.getAttachments()) {
                     if (att.getFileName().equalsIgnoreCase("xjustiz_nachricht.xml")) {
                         String xjustiz = new String(att.getContent());
-                        String html = BeaAccess.getEebAsHtml(xjustiz);
-                        System.out.println(html);
-                        BeaEebDisplayDialog dlg = new BeaEebDisplayDialog(EditorsRegistry.getInstance().getMainWindow(), true);
+                        String html = "<html>Unbekannter XJustiz-Datensatztyp</html>";
+                        if (BeaAccess.isEebRequest(xjustiz)) {
+                            html = BeaAccess.getEebAsHtml(xjustiz, null);
+
+//                            EebResponseAttributes attrs = BeaAccess.getEebResponseAttributes(xjustiz);
+//                            String otherMessageId = null;
+//                            if (mh.getId().equals(attrs.getOwnMessageId())) {
+//                                otherMessageId = attrs.getForeignMessageId();
+//                            } else {
+//                                otherMessageId = attrs.getOwnMessageId();
+//                            }
+//
+//                            Message otherMessage = BeaAccess.getInstance().getMessage(otherMessageId, BeaAccess.getInstance().getLoggedInSafeId());
+//                            
+//                            String otherXjustiz=null;
+//                            for (Attachment att2 : otherMessage.getAttachments()) {
+//                                if (att2.getFileName().equalsIgnoreCase("xjustiz_nachricht.xml")) {
+//                                    otherXjustiz = new String(att2.getContent());
+//                                }
+//                            }
+//                            request=otherXjustiz;
+                        } else if (BeaAccess.isEebResponse(xjustiz)) {
+                            log.warn("TODO: find matching XJustiz file - see ticket https://github.com/jlawyerorg/j-lawyer-org/issues/917");
+                            html = BeaAccess.getEebAsHtml(null, xjustiz);
+                        } else {
+                            log.error("Unknown XJustiz file type!");
+                        }
+
+                        BeaEebDisplayDialog dlg = new BeaEebDisplayDialog(EditorsRegistry.getInstance().getMainWindow());
                         dlg.setHtml(html);
                         FrameUtils.centerDialog(dlg, EditorsRegistry.getInstance().getMainWindow());
                         dlg.setVisible(true);
@@ -2880,10 +2903,25 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
 
             } catch (Exception ex) {
                 log.error(ex);
-                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Senden der eEB-Bestätigung: " + ex.getMessage(), "Fehler");
+                ThreadUtils.showErrorDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Senden der eEB-Bestätigung: " + ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR);
             }
         }
         return false;
+    }
+
+    @Override
+    public boolean renameCallback() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public boolean removeCallback() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public boolean splitPdfCallback() {
+        return true;
     }
 
     public static class BeaObjectsCleanUp implements Runnable {
@@ -2911,11 +2949,8 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
     }
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private com.jdimension.jlawyer.client.bea.BeaMessageContentUI beaMessageContentUI;
-    private javax.swing.JCheckBox chkCaseTagging;
-    private javax.swing.JCheckBox chkDocumentTagging;
     private javax.swing.JCheckBox chkMoveToImported;
-    private javax.swing.JComboBox<String> cmbCaseTag;
-    private javax.swing.JComboBox<String> cmbDocumentTag;
+    private javax.swing.JComboBox<String> cmbDownloadMails;
     private javax.swing.JButton cmdDelete;
     private javax.swing.JButton cmdForward;
     private javax.swing.JButton cmdLogout;
@@ -2935,8 +2970,10 @@ public class BeaInboxPanel extends javax.swing.JPanel implements SaveToCaseExecu
     private javax.swing.JSplitPane jSplitPane1;
     private javax.swing.JToolBar jToolBar1;
     protected javax.swing.JLabel lblPanelTitle;
+    private javax.swing.JLabel lblTempFilesWarning;
     private javax.swing.JSplitPane mainSplitter;
     private javax.swing.JMenuItem mnuEmptyTrash;
+    private javax.swing.JMenuItem mnuMarkRead;
     private javax.swing.JMenuItem mnuNewFolder;
     private javax.swing.JMenuItem mnuRemoveFolder;
     private javax.swing.JMenuItem mnuRestoreFromTrash;

@@ -675,6 +675,7 @@ public class GifJpegPngImagePanel extends javax.swing.JPanel implements PreviewP
 
     /**
      * Creates new form PlaintextPanel
+     * @param content
      */
     public GifJpegPngImagePanel(byte[] content) {
         initComponents();
@@ -705,11 +706,11 @@ public class GifJpegPngImagePanel extends javax.swing.JPanel implements PreviewP
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 509, Short.MAX_VALUE)
+            .addComponent(jScrollPane1)
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 300, Short.MAX_VALUE)
+            .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 22, Short.MAX_VALUE)
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -730,18 +731,14 @@ public class GifJpegPngImagePanel extends javax.swing.JPanel implements PreviewP
         ImageIcon imageIcon = new ImageIcon(content); // load the image to a imageIcon
         Image image = imageIcon.getImage(); // transform it
         
+        // need to subtract the height of the page navigation buttons, but
+        // the panel has not been layed out yet, so there is no height we could query
+        int height=Math.max(this.getHeight()-35, 200);
         
-        int height=Math.max(this.getHeight(), 200);
         float scaleFactor=(float)height/(float)imageIcon.getIconHeight();
         int width=(int)((float)imageIcon.getIconWidth()*scaleFactor);
         Image newimg=image.getScaledInstance(width,height,Image.SCALE_FAST);
         
-        
-        
-	        
-                //float scaleFactor=(float)((float)this.getWidth()/(float)imageIcon.getIconWidth());
-	        //Image newimg = image.getScaledInstance(this.getWidth(), (int)((float)imageIcon.getIconHeight()*scaleFactor),  java.awt.Image.SCALE_FAST); // scale it the smooth way 
-	        
         imageIcon = new ImageIcon(newimg);  // transform it back
         
         this.lblContent.setSize(this.getWidth(),this.lblContent.getHeight());

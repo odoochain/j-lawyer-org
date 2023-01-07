@@ -705,13 +705,9 @@ public class LinuxOfficeLauncher extends OfficeLauncher {
                     Process p = null;
                     boolean libreOffice = false;
                     try {
-                        if (store.isReadOnly()) {
-                            // do not use -view switch - in this case there will be no lock file, which makes it more risky
-                            //p = Runtime.getRuntime().exec(new String[]{loBinary, "-view", url});
-                            p = Runtime.getRuntime().exec(new String[]{loBinary, url});
-                        } else {
-                            p = Runtime.getRuntime().exec(new String[]{loBinary, url});
-                        }
+                        // do not use -view switch - in this case there will be no lock file, which makes it more risky
+                        //p = Runtime.getRuntime().exec(new String[]{loBinary, "-view", url});
+                        p = Runtime.getRuntime().exec(new String[]{loBinary, url});
                         libreOffice = true;
                     } catch (Throwable ex) {
                         log.error("error starting libreoffice" + ex.getMessage());
@@ -742,14 +738,9 @@ public class LinuxOfficeLauncher extends OfficeLauncher {
                         log.debug(new java.util.Date().toString() + " no LO found - falling back to OOO");
                         try {
                             int exit = 0;
-                            if (store.isReadOnly()) {
-                                // do not use -view switch - in this case there will be no lock file, which makes it more risky
-                                //p = Runtime.getRuntime().exec(new String[]{oooBinary, "-view", url});
-                                p = Runtime.getRuntime().exec(new String[]{oooBinary, url});
-                            } else {
-                                p = Runtime.getRuntime().exec(new String[]{oooBinary, url});
-                            }
-
+                            // do not use -view switch - in this case there will be no lock file, which makes it more risky
+                            //p = Runtime.getRuntime().exec(new String[]{oooBinary, "-view", url});
+                            p = Runtime.getRuntime().exec(new String[]{oooBinary, url});
                             odoc.setStatus(ObservedDocument.STATUS_OPEN);
                             log.debug("waitFor");
                             exit = p.waitFor();
@@ -774,7 +765,7 @@ public class LinuxOfficeLauncher extends OfficeLauncher {
                     SwingUtilities.invokeLater(new Runnable() {
 
                         public void run() {
-                            JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Öffnen des Dokuments: " + t.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+                            JOptionPane.showMessageDialog(EditorsRegistry.getInstance().getMainWindow(), "Fehler beim Öffnen des Dokuments: " + t.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
                         }
                     });
                 }

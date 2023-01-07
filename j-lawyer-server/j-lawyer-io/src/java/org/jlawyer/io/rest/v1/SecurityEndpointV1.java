@@ -663,7 +663,6 @@ For more information on this, and how to apply and follow the GNU AGPL, see
  */
 package org.jlawyer.io.rest.v1;
 
-import javax.annotation.security.RolesAllowed;
 import javax.ejb.Stateless;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -691,11 +690,11 @@ public class SecurityEndpointV1 implements SecurityEndpointLocalV1 {
     @Override
     @Path("/metadata")
     @GET
-    @Produces(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON+";charset=utf-8")
     public Response getApiMetadata() {
 
         ApiMetadataV1 meta = new ApiMetadataV1();
-        meta.setApiLevel(2);
+        meta.setApiLevel(6);
 
         Response res = Response.ok(meta).build();
         return res;

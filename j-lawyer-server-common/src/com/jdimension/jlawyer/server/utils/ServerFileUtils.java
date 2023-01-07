@@ -669,8 +669,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Hashtable;
-import javax.swing.Icon;
 
 /**
  *
@@ -694,27 +692,29 @@ public class ServerFileUtils {
     }
 
     public static byte[] readFile(File file) throws Exception {
-        FileInputStream fileInputStream = new FileInputStream(file);
-        byte[] data = new byte[(int) file.length()];
-        fileInputStream.read(data);
-        fileInputStream.close();
-        return data;
+        try (FileInputStream fileInputStream = new FileInputStream(file);) {
+            if(file.length()>Integer.MAX_VALUE) {
+                throw new Exception("Cannot read files larger than 2GB into a single array, but " + file.getAbsolutePath() + " has " + file.length() + " bytes!");
+            }
+            byte[] data = new byte[(int) file.length()];
+            fileInputStream.read(data);
+            return data;
+        }
     }
     
     public static String readFileAsString(File file) throws Exception {
-        FileReader fileReader = new FileReader(file);
-        BufferedReader br=new BufferedReader(fileReader);
-        StringBuilder sb = new StringBuilder();
-        String line = br.readLine();
+        try (FileReader fileReader = new FileReader(file);
+                BufferedReader br = new BufferedReader(fileReader);) {
+            StringBuilder sb = new StringBuilder();
+            String line = br.readLine();
 
-        while (line != null) {
-            sb.append(line);
-            sb.append(System.lineSeparator());
-            line = br.readLine();
+            while (line != null) {
+                sb.append(line);
+                sb.append(System.lineSeparator());
+                line = br.readLine();
+            }
+            return sb.toString();
         }
-        br.close();
-        fileReader.close();
-        return sb.toString();
         
     }
     

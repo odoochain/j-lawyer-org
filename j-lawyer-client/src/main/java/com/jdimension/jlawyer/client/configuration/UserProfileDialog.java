@@ -665,19 +665,23 @@ package com.jdimension.jlawyer.client.configuration;
 
 import com.jdimension.jlawyer.client.desktop.DesktopPanel;
 import com.jdimension.jlawyer.client.editors.EditorsRegistry;
+import com.jdimension.jlawyer.client.settings.ClientSettings;
+import com.jdimension.jlawyer.client.settings.ServerSettings;
 import com.jdimension.jlawyer.client.settings.UserSettings;
+import com.jdimension.jlawyer.client.utils.FrameUtils;
 import com.jdimension.jlawyer.persistence.AppUserBean;
+import com.jdimension.jlawyer.services.JLawyerServiceLocator;
+import com.jdimension.jlawyer.services.SystemManagementRemote;
 import java.awt.Component;
 import java.util.Arrays;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.ImageIcon;
-import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JOptionPane;
 import javax.swing.UIManager;
 import org.apache.log4j.Logger;
 import themes.colors.DefaultColorTheme;
-
 
 /**
  *
@@ -685,31 +689,20 @@ import themes.colors.DefaultColorTheme;
  */
 public class UserProfileDialog extends javax.swing.JDialog {
 
-    private static final Logger log=Logger.getLogger(UserProfileDialog.class.getName());
-    
-    private Object[] names=null;
-    
+    private static final Logger log = Logger.getLogger(UserProfileDialog.class.getName());
+
+    private Object[] names = null;
+
     /**
      * Creates new form UserProfileDialog
+     * @param parent
+     * @param modal
      */
     public UserProfileDialog(java.awt.Frame parent, boolean modal) {
         super(parent, modal);
         initComponents();
-        
-//        try {
-//            Enumeration<URL> urls=ClassLoader.getSystemClassLoader().getResources("avatar32");
-//            while(urls.hasMoreElements()) {
-//                URL url=urls.nextElement();
-//                System.out.println(url.getFile() + url.getPath());
-//            }
-//            
-//        } catch (IOException ex) {
-//            log.error("Could not find avatars", ex);
-//        }
-        
-        this.names = new Object[]
-        {
-            
+
+        this.names = new Object[]{
             "aim_protocol.png",
             "babelfish.png",
             "bug.png",
@@ -749,94 +742,89 @@ public class UserProfileDialog extends javax.swing.JDialog {
             "Mitarbeiter-Icons-23.png",
             "Mitarbeiter-Icons-24.png",
             "Mitarbeiter-Icons-25.png"
-            
+
         };
-        
-        Object[] items =
-        {
-            
-            new ImageIcon(getClass().getResource("/avatar32/aim_protocol.png")),
-            new ImageIcon(getClass().getResource("/avatar32/babelfish.png")),
-            new ImageIcon(getClass().getResource("/avatar32/bug.png")),
-            new ImageIcon(getClass().getResource("/avatar32/edit_user.png")),
-            new ImageIcon(getClass().getResource("/avatar32/gadu.png")),
-            new ImageIcon(getClass().getResource("/avatar32/identity.png")),
-            new ImageIcon(getClass().getResource("/avatar32/jlawyer.png")),
-            new ImageIcon(getClass().getResource("/avatar32/katuberling.png")),
-            new ImageIcon(getClass().getResource("/avatar32/ksmiletris.png")),
-            new ImageIcon(getClass().getResource("/avatar32/kugardata.png")),
-            new ImageIcon(getClass().getResource("/avatar32/licq.png")),
-            new ImageIcon(getClass().getResource("/avatar32/mozillacrystal.png")),
-            new ImageIcon(getClass().getResource("/avatar32/msn.png")),
-            new ImageIcon(getClass().getResource("/avatar32/organizer.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-01.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-02.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-03.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-04.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-05.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-06.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-07.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-08.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-09.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-10.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-11.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-12.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-13.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-14.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-15.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-16.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-17.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-18.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-19.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-20.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-21.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-22.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-23.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-24.png")),
-            new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-25.png"))
-            
-        };
+
+        Object[] items
+                = {
+                    new ImageIcon(getClass().getResource("/avatar32/aim_protocol.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/babelfish.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/bug.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/edit_user.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/gadu.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/identity.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/jlawyer.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/katuberling.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/ksmiletris.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/kugardata.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/licq.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/mozillacrystal.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/msn.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/organizer.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-01.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-02.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-03.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-04.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-05.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-06.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-07.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-08.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-09.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-10.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-11.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-12.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-13.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-14.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-15.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-16.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-17.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-18.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-19.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-20.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-21.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-22.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-23.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-24.png")),
+                    new ImageIcon(getClass().getResource("/avatar32/Mitarbeiter-Icons-25.png"))
+
+                };
         this.cmbAvatar.setModel(new DefaultComboBoxModel(items));
         this.cmbAvatar.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> jlist, Object o, int i, boolean selected, boolean cellHasFocus) {
-//                JLabel label=new JLabel();
-//                label.setText("");
 
                 this.setText("");
                 this.setOpaque(true);
-                if(o instanceof ImageIcon) {
-                    this.setIcon(((ImageIcon)o));
+                if (o instanceof ImageIcon) {
+                    this.setIcon(((ImageIcon) o));
                 }
-                if(cellHasFocus) {
+                if (cellHasFocus) {
                     this.setBackground(DefaultColorTheme.COLOR_LOGO_BLUE);
                 } else {
                     this.setBackground(UIManager.getColor("List.background"));
                 }
-                
-                if(selected) {
+
+                if (selected) {
                     this.setBackground(DefaultColorTheme.COLOR_LOGO_GREEN);
                 }
-                
+
                 return this;
             }
-            
+
         });
-        
-        String currentIcon=UserSettings.getInstance().getSetting(UserSettings.USER_AVATAR, "identity.png");
-        //int selectedIndex=Arrays.binarySearch(names, currentIcon);
-        int selectedIndex=new java.util.ArrayList(Arrays.asList(names)).indexOf(currentIcon);
+
+        String currentIcon = UserSettings.getInstance().getSetting(UserSettings.USER_AVATAR, "identity.png");
+        int selectedIndex = new java.util.ArrayList(Arrays.asList(names)).indexOf(currentIcon);
         this.cmbAvatar.setSelectedIndex(Math.max(0, selectedIndex));
-        
-        AppUserBean cu=UserSettings.getInstance().getCurrentUser();
+
+        AppUserBean cu = UserSettings.getInstance().getCurrentUser();
         this.lblAbbreviation.setText(cu.getAbbreviation());
-        if(cu.getPrimaryGroup()!=null) {
+        if (cu.getPrimaryGroup() != null) {
             this.lblGroup.setText(cu.getPrimaryGroup().getName());
         } else {
             this.lblGroup.setText("");
         }
-        
-        
+
     }
 
     /**
@@ -857,6 +845,8 @@ public class UserProfileDialog extends javax.swing.JDialog {
         lblGroup = new javax.swing.JLabel();
         jLabel3 = new javax.swing.JLabel();
         lblAbbreviation = new javax.swing.JLabel();
+        jLabel2 = new javax.swing.JLabel();
+        cmdChangePassword = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
         java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/configuration/UserProfileDialog"); // NOI18N
@@ -894,6 +884,16 @@ public class UserProfileDialog extends javax.swing.JDialog {
 
         lblAbbreviation.setText("jLabel4");
 
+        jLabel2.setText("Passwort:");
+
+        cmdChangePassword.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/ksysv.png"))); // NOI18N
+        cmdChangePassword.setText("ändern");
+        cmdChangePassword.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cmdChangePasswordActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
@@ -903,12 +903,14 @@ public class UserProfileDialog extends javax.swing.JDialog {
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jLabel1)
                     .addComponent(jLabel16)
-                    .addComponent(jLabel3))
+                    .addComponent(jLabel3)
+                    .addComponent(jLabel2))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(cmbAvatar, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(jPanel1Layout.createSequentialGroup()
                         .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(cmdChangePassword)
                             .addComponent(lblAbbreviation)
                             .addComponent(lblGroup))
                         .addGap(0, 0, Short.MAX_VALUE)))
@@ -929,7 +931,11 @@ public class UserProfileDialog extends javax.swing.JDialog {
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel3)
                     .addComponent(lblAbbreviation))
-                .addContainerGap(72, Short.MAX_VALUE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jLabel2)
+                    .addComponent(cmdChangePassword))
+                .addContainerGap(30, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -963,18 +969,18 @@ public class UserProfileDialog extends javax.swing.JDialog {
     }// </editor-fold>//GEN-END:initComponents
 
     private void cmdSaveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdSaveActionPerformed
-        
-        UserSettings settings=UserSettings.getInstance();
-        String avatar=this.names[this.cmbAvatar.getSelectedIndex()].toString();
+
+        UserSettings settings = UserSettings.getInstance();
+        String avatar = this.names[this.cmbAvatar.getSelectedIndex()].toString();
         settings.setSetting(UserSettings.USER_AVATAR, avatar);
-        
+
         try {
-            Object desktop=EditorsRegistry.getInstance().getEditor(DesktopPanel.class.getName());
-            ((DesktopPanel)desktop).updateUserIcon();
+            Object desktop = EditorsRegistry.getInstance().getEditor(DesktopPanel.class.getName());
+            ((DesktopPanel) desktop).updateUserIcon();
         } catch (Throwable t) {
             log.error("Error changing user icon", t);
         }
-        
+
         this.setVisible(false);
         this.dispose();
     }//GEN-LAST:event_cmdSaveActionPerformed
@@ -983,6 +989,41 @@ public class UserProfileDialog extends javax.swing.JDialog {
         this.setVisible(false);
         this.dispose();
     }//GEN-LAST:event_cmdCloseActionPerformed
+
+    private void cmdChangePasswordActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdChangePasswordActionPerformed
+        int response = JOptionPane.showConfirmDialog(this, "Nach Passwortänderung muss die Anwendung neu gestartet werden. Stellen Sie sicher dass alle Dokumente / Akten geschlossen sind. Fortfahren?", "Passwort ändern", JOptionPane.YES_NO_OPTION);
+        if (response == JOptionPane.NO_OPTION) {
+            return;
+        }
+        
+        boolean complexPasswords=ServerSettings.getInstance().getSettingAsBoolean(ServerSettings.SERVERCONF_SECURITY_FORCE_PASSWORDCOMPLEXITY, true);
+        GetPasswordDialog dlg=new GetPasswordDialog(this, true, complexPasswords);
+        FrameUtils.centerDialog(dlg, this);
+        dlg.setVisible(true);
+        
+        String newPwd=dlg.getPassword();
+
+        if (newPwd!=null) {
+            ClientSettings settings = ClientSettings.getInstance();
+            try {
+                JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
+
+                SystemManagementRemote mgmt = locator.lookupSystemManagementRemote();
+                AppUserBean u = mgmt.getUser(UserSettings.getInstance().getCurrentUser().getPrincipalId());
+                if (u != null) {
+                    mgmt.updatePassword(newPwd);
+                }
+
+            } catch (Exception ex) {
+                log.error("Error connecting to server", ex);
+                JOptionPane.showMessageDialog(this, ex.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Passwort NICHT aktualisiert!", "Hinweis", JOptionPane.WARNING_MESSAGE);
+        }
+
+    }//GEN-LAST:event_cmdChangePasswordActionPerformed
 
     /**
      * @param args the command line arguments
@@ -1018,27 +1059,26 @@ public class UserProfileDialog extends javax.swing.JDialog {
         /*
          * Create and display the dialog
          */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-
-            public void run() {
-                UserProfileDialog dialog = new UserProfileDialog(new javax.swing.JFrame(), true);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            UserProfileDialog dialog = new UserProfileDialog(new javax.swing.JFrame(), true);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JComboBox cmbAvatar;
+    private javax.swing.JButton cmdChangePassword;
     private javax.swing.JButton cmdClose;
     private javax.swing.JButton cmdSave;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel16;
+    private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JLabel lblAbbreviation;

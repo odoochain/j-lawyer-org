@@ -663,6 +663,7 @@
  */
 package com.jdimension.jlawyer.client.mail;
 
+import com.jdimension.jlawyer.server.utils.ContentTypes;
 import javax.swing.KeyStroke;
 
 /**
@@ -682,6 +683,14 @@ public class TextEditorPanel extends javax.swing.JPanel implements EditorImpleme
         this.jScrollPane2.getInputMap().put(KeyStroke.getKeyStroke("DOWN"), "none");
     }
 
+    @Override
+    public void requestFocus() {
+        super.requestFocus();
+        this.taText.requestFocus();
+    }
+
+    
+    
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -697,7 +706,7 @@ public class TextEditorPanel extends javax.swing.JPanel implements EditorImpleme
         jScrollPane2.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 
         taText.setColumns(20);
-        taText.setFont(new java.awt.Font("Dialog", 0, 14)); // NOI18N
+        taText.setFont(taText.getFont().deriveFont(taText.getFont().getSize()+2f));
         taText.setLineWrap(true);
         taText.setRows(5);
         taText.setWrapStyleWord(true);
@@ -721,7 +730,7 @@ public class TextEditorPanel extends javax.swing.JPanel implements EditorImpleme
 
     @Override
     public String getContentType() {
-        return "text/plain";
+        return ContentTypes.TEXT_PLAIN;
     }
 
     @Override
@@ -732,13 +741,11 @@ public class TextEditorPanel extends javax.swing.JPanel implements EditorImpleme
     @Override
     public void setText(String t) {
         this.taText.setText(t);
-//        this.tpText.setText(t);
     }
 
     @Override
     public void setCaretPosition(int pos) {
         this.taText.setCaretPosition(pos);
-//        this.tpText.setCaretPosition(pos);
     }
 
     @Override

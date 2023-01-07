@@ -663,7 +663,6 @@
  */
 package com.jdimension.jlawyer.client.editors.files;
 
-import com.jdimension.jlawyer.client.editors.EditorsRegistry;
 import com.jdimension.jlawyer.client.mail.SendCommunicationDialog;
 import com.jdimension.jlawyer.client.processing.ProgressIndicator;
 import com.jdimension.jlawyer.client.processing.ProgressableAction;
@@ -674,12 +673,12 @@ import com.jdimension.jlawyer.client.utils.FrameUtils;
 import com.jdimension.jlawyer.persistence.ArchiveFileDocumentsBean;
 import com.jdimension.jlawyer.services.ArchiveFileServiceRemote;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
+import com.jdimension.jlawyer.ui.folders.CaseFolderPanel;
 import java.io.File;
+import java.util.ArrayList;
 import javax.swing.JDialog;
 import javax.swing.JOptionPane;
-import javax.swing.JTable;
 import javax.swing.SwingUtilities;
-import javax.swing.table.DefaultTableModel;
 import org.apache.log4j.Logger;
 
 /**
@@ -689,10 +688,10 @@ import org.apache.log4j.Logger;
 public class SendPDFAction extends ProgressableAction {
 
     private static final Logger log = Logger.getLogger(SendPDFAction.class.getName());
-    private JTable table = null;
+    private CaseFolderPanel table = null;
     private SendCommunicationDialog dlg = null;
 
-    public SendPDFAction(ProgressIndicator i, JTable table, SendCommunicationDialog dlg) {
+    public SendPDFAction(ProgressIndicator i, CaseFolderPanel table, SendCommunicationDialog dlg) {
         super(i, false);
         this.table = table;
         this.dlg = dlg;
@@ -700,7 +699,7 @@ public class SendPDFAction extends ProgressableAction {
 
     @Override
     public int getMax() {
-        return this.table.getSelectedRows().length;
+        return this.table.getSelectedDocuments().size();
     }
 
     @Override
@@ -716,24 +715,22 @@ public class SendPDFAction extends ProgressableAction {
             FileConverter conv = FileConverter.getInstance();
             JLawyerServiceLocator locator = JLawyerServiceLocator.getInstance(settings.getLookupProperties());
             ArchiveFileServiceRemote remote = locator.lookupArchiveFileServiceRemote();
-            int[] selectedRows = this.table.getSelectedRows();
-            DefaultTableModel tModel = (DefaultTableModel) this.table.getModel();
-            for (int i = selectedRows.length - 1; i > -1; i--) {
+            ArrayList<ArchiveFileDocumentsBean> selectedDocs=this.table.getSelectedDocuments();
+            for (ArchiveFileDocumentsBean doc: selectedDocs) {
                 if (this.isCancelled()) {
                     return true;
                 }
 
-                ArchiveFileDocumentsBean doc = (ArchiveFileDocumentsBean) this.table.getValueAt(selectedRows[i], 0);
-
                 this.progress("Konvertiere zu PDF: " + doc.getName());
-                byte[] content = locator.lookupArchiveFileServiceRemote().getDocumentContent(doc.getId());
+                byte[] content = remote.getDocumentContent(doc.getId());
+                
                 String tmpUrl = FileUtils.createTempFile(doc.getName(), content);
-                if (doc.getName().toLowerCase().endsWith(".pdf")) {
+                if (doc.getName().toLowerCase().endsWith(".pdf") || !(conv.supportsInputFormat(doc.getName().toLowerCase()))) {
                     dlg.addAttachment(tmpUrl, doc.getDictateSign());
                 } else {
                     String pdfUrl = conv.convertToPDF(tmpUrl);
                     try {
-                        // give some more time to LibreOfficed to shut down
+                        // give some more time to LibreOffice to shut down
                         Thread.sleep(2500);
                     } catch (Throwable t) {
                         log.error(t);
@@ -746,20 +743,17 @@ public class SendPDFAction extends ProgressableAction {
 
         } catch (Exception ioe) {
             log.error("Error converting documents", ioe);
-            JOptionPane.showMessageDialog(this.indicator, "Fehler beim Konvertieren der Dokumente: " + ioe.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this.indicator, "Fehler beim Konvertieren der Dokumente: " + ioe.getMessage(), com.jdimension.jlawyer.client.utils.DesktopUtils.POPUP_TITLE_ERROR, JOptionPane.ERROR_MESSAGE);
         }
 
 
 
-        SwingUtilities.invokeLater(new Thread(new Runnable() {
-
-            public void run() {
-                try {
-                    FrameUtils.centerDialog((JDialog)dlg, null);
-                    ((JDialog)dlg).setVisible(true);
-                } catch (Throwable t) {
-                    log.error(t);
-                }
+        SwingUtilities.invokeLater(new Thread(() -> {
+            try {
+                FrameUtils.centerDialog((JDialog)dlg, null);
+                ((JDialog)dlg).setVisible(true);
+            } catch (Throwable t) {
+                log.error(t);
             }
         }));
 

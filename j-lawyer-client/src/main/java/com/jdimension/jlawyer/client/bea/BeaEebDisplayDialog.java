@@ -663,6 +663,7 @@ For more information on this, and how to apply and follow the GNU AGPL, see
  */
 package com.jdimension.jlawyer.client.bea;
 
+import com.jdimension.jlawyer.server.utils.ContentTypes;
 import javax.swing.text.StyledEditorKit;
 import javax.swing.text.html.HTMLDocument;
 
@@ -674,26 +675,24 @@ public class BeaEebDisplayDialog extends javax.swing.JDialog {
 
     /**
      * Creates new form BeaEebDisplayDialog
+     * @param parent
      */
-    public BeaEebDisplayDialog(java.awt.Frame parent, boolean modal) {
-        super(parent, modal);
+    public BeaEebDisplayDialog(java.awt.Window parent) {
+        super(parent);
         initComponents();
     }
 
     public void setHtml(String html) {
         this.editorPane.setEditorKit(new StyledEditorKit());
-        this.editorPane.setContentType("text/html");
+        this.editorPane.setContentType(ContentTypes.TEXT_HTML);
 
         String tdRule = "th { color: #FFFFFF; }";
 
         ((HTMLDocument) this.editorPane.getDocument()).getStyleSheet().addRule(tdRule);
-        //html = this.cleanUpHTML(html);
 
         // do this AFTER setContentType and BEFORE setText!!!
         this.editorPane.getDocument().putProperty("IgnoreCharsetDirective", Boolean.TRUE);
-        //this.jEditorPane1.setDocument(doc);
 
-        //html.replaceAll("#DDD", "grey");
         this.editorPane.setText(html);
     }
 
@@ -783,17 +782,15 @@ public class BeaEebDisplayDialog extends javax.swing.JDialog {
         //</editor-fold>
 
         /* Create and display the dialog */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                BeaEebDisplayDialog dialog = new BeaEebDisplayDialog(new javax.swing.JFrame(), true);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            BeaEebDisplayDialog dialog = new BeaEebDisplayDialog(new javax.swing.JFrame());
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
 

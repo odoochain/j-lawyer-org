@@ -666,8 +666,6 @@ import java.io.Serializable;
 import javax.persistence.Basic;
 import javax.persistence.Column;
 import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
@@ -702,6 +700,9 @@ public class PartyTypeBean implements Serializable {
     
     @Column(name = "color")
     private int color;
+    
+    @Column(name = "sequence_no")
+    protected int sequenceNumber;
     
     
 
@@ -778,6 +779,20 @@ public class PartyTypeBean implements Serializable {
      */
     public void setColor(int color) {
         this.color = color;
+    }
+
+    /**
+     * @return the sequenceNumber
+     */
+    public int getSequenceNumber() {
+        return sequenceNumber;
+    }
+
+    /**
+     * @param sequenceNumber the sequenceNumber to set
+     */
+    public void setSequenceNumber(int sequenceNumber) {
+        this.sequenceNumber = sequenceNumber;
     }
     
 }

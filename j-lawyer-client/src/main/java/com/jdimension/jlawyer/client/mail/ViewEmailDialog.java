@@ -669,14 +669,15 @@ import com.jdimension.jlawyer.client.settings.ClientSettings;
 import com.jdimension.jlawyer.client.utils.ComponentUtils;
 import com.jdimension.jlawyer.client.utils.FileUtils;
 import com.jdimension.jlawyer.client.utils.FrameUtils;
-import com.jdimension.jlawyer.persistence.AddressBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileAddressesBean;
 import com.jdimension.jlawyer.persistence.ArchiveFileBean;
+import com.jdimension.jlawyer.persistence.CaseFolder;
+import com.jdimension.jlawyer.persistence.MailboxSetup;
+import com.jdimension.jlawyer.server.utils.ContentTypes;
 import com.jdimension.jlawyer.services.ArchiveFileServiceRemote;
 import com.jdimension.jlawyer.services.JLawyerServiceLocator;
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import javax.mail.*;
 import javax.mail.Message.RecipientType;
@@ -692,27 +693,44 @@ public class ViewEmailDialog extends javax.swing.JDialog {
     private static final Logger log = Logger.getLogger(ViewEmailDialog.class.getName());
     private MessageContainer msgContainer = null;
     private ArchiveFileBean contextArchiveFile = null;
+    private CaseFolder contextFolder=null;
     private ObservedDocument odoc = null;
 
     /**
      * Creates new form ViewEmailDialog
+     * @param parent
+     * @param contextArchiveFile
+     * @param contextFolder
      */
-    public ViewEmailDialog(java.awt.Frame parent, boolean modal, ArchiveFileBean contextArchiveFile) {
-        this(parent, modal, contextArchiveFile, null);
+    public ViewEmailDialog(java.awt.Window parent, ArchiveFileBean contextArchiveFile, CaseFolder contextFolder) {
+        this(parent, contextArchiveFile, contextFolder, null);
 
     }
 
-    public ViewEmailDialog(java.awt.Frame parent, boolean modal, ArchiveFileBean contextArchiveFile, ObservedDocument odoc) {
-        super(parent, modal);
+    public ViewEmailDialog(java.awt.Window parent, ArchiveFileBean contextArchiveFile, CaseFolder contextFolder, ObservedDocument odoc) {
+        super(parent);
         initComponents();
         this.contextArchiveFile = contextArchiveFile;
+        this.contextFolder=contextFolder;
         this.odoc = odoc;
+
+        ComponentUtils.restoreDialogSize(this);
+
+    }
+    
+    public ViewEmailDialog(ArchiveFileBean contextArchiveFile, CaseFolder contextFolder, ObservedDocument odoc) {
+        super();
+        initComponents();
+        this.contextArchiveFile = contextArchiveFile;
+        this.contextFolder=contextFolder;
+        this.odoc = odoc;
+
         ComponentUtils.restoreDialogSize(this);
 
     }
 
-    public void setMessage(MessageContainer msgC) {
-        this.content.setMessage(msgC);
+    public void setMessage(MessageContainer msgC, MailboxSetup ms) {
+        this.content.setMessage(msgC, ms);
         this.msgContainer = msgC;
     }
 
@@ -809,58 +827,10 @@ public class ViewEmailDialog extends javax.swing.JDialog {
     }// </editor-fold>//GEN-END:initComponents
 
     private void cmdReplyActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdReplyActionPerformed
-        SendEmailDialog dlg = new SendEmailDialog(EditorsRegistry.getInstance().getMainWindow(), false);
-        dlg.setArchiveFile(this.contextArchiveFile);
-
         MessageContainer msgC = this.msgContainer;
-        try {
-            Message m = msgC.getMessage();
-            Address[] replyTos = m.getReplyTo();
-            Address to = null;
-            if (replyTos != null) {
-                if (replyTos.length > 0) {
-                    to = replyTos[0];
-                }
-            }
-            if (to == null) {
-                to = m.getFrom()[0];
-            }
-            try {
-                dlg.setTo(MimeUtility.decodeText(to.toString()));
-            } catch (Throwable t) {
-                log.error(t);
-                dlg.setTo(to.toString());
-            }
-
-            String subject = m.getSubject();
-            if (subject == null) {
-                subject = "";
-            }
-            if (!subject.startsWith("Re: ")) {
-                subject = "Re: " + subject;
-            }
-            dlg.setSubject(subject);
-
-            String decodedTo = to.toString();
-            try {
-                decodedTo = MimeUtility.decodeText(to.toString());
-            } catch (Throwable t) {
-                log.error(t);
-            }
-            //dlg.setBody(System.getProperty("line.separator") + System.getProperty("line.separator") + "*** " + decodedTo + " schrieb: ***" + System.getProperty("line.separator") + System.getProperty("line.separator") + this.content.getBody());
-            String contentType = this.content.getContentType();
-            dlg.setContentType(contentType);
-            if (contentType.toLowerCase().startsWith("text/html")) {
-                dlg.setBody(EmailUtils.getQuotedBody(EmailUtils.Html2Text(this.content.getBody()), "text/plain", decodedTo, m.getSentDate()), "text/plain");
-            } else {
-                dlg.setBody(EmailUtils.getQuotedBody(this.content.getBody(), "text/plain", decodedTo, m.getSentDate()), "text/plain");
-            }
-            dlg.setBody(EmailUtils.getQuotedBody(this.content.getBody(), "text/html", decodedTo, m.getSentDate()), "text/html");
-
-        } catch (MessagingException ex) {
-            log.error(ex);
-        }
-
+        Message m = msgC.getMessage();
+        SendEmailDialog dlg = EmailUtils.reply(m, this.content.getBody(), this.content.getContentType());
+        dlg.setArchiveFile(this.contextArchiveFile, this.contextFolder);
         FrameUtils.centerDialog(dlg, null);
         dlg.setVisible(true);
 
@@ -872,34 +842,29 @@ public class ViewEmailDialog extends javax.swing.JDialog {
     }//GEN-LAST:event_cmdReplyActionPerformed
 
     private void cmdReplyAllActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdReplyAllActionPerformed
-        SendEmailDialog dlg = new SendEmailDialog(EditorsRegistry.getInstance().getMainWindow(), false);
-        dlg.setArchiveFile(this.contextArchiveFile);
+        SendEmailDialog dlg = new SendEmailDialog(true, EditorsRegistry.getInstance().getMainWindow(), false);
+        dlg.setArchiveFile(this.contextArchiveFile, this.contextFolder);
 
         MessageContainer msgC = this.msgContainer;
         try {
             Message origM = msgC.getMessage();
+            MailboxSetup ms=EmailUtils.getMailboxSetup(origM);
+            if(ms!=null) {
+                dlg.setFrom(ms);
+            }
+            
             Message m = origM.reply(true);
 
             try {
                 Address[] to = m.getRecipients(RecipientType.TO);
-                String toString = "";
-                for (Address a : to) {
-                    toString = toString + MimeUtility.decodeText(a.toString()) + ", ";
-                }
+                String toString = EmailUtils.getAddressesAsList(to);
+                
                 Address[] cc = m.getRecipients(RecipientType.CC);
-                String ccString = "";
-                if (cc != null) {
-                    for (Address a : cc) {
-                        ccString = ccString + MimeUtility.decodeText(a.toString()) + ", ";
-                    }
-                }
+                String ccString = EmailUtils.getAddressesAsList(cc);
+                
                 Address[] bcc = m.getRecipients(RecipientType.BCC);
-                String bccString = "";
-                if (bcc != null) {
-                    for (Address a : bcc) {
-                        bccString = bccString + MimeUtility.decodeText(a.toString()) + ", ";
-                    }
-                }
+                String bccString = EmailUtils.getAddressesAsList(bcc);
+                
                 dlg.setTo(toString);
                 dlg.setCC(ccString);
                 dlg.setBCC(bccString);
@@ -924,17 +889,16 @@ public class ViewEmailDialog extends javax.swing.JDialog {
             } catch (Throwable t) {
                 log.error(t);
             }
-            //dlg.setBody(System.getProperty("line.separator") + System.getProperty("line.separator") + "*** " + decodedTo + " schrieb: ***" + System.getProperty("line.separator") + System.getProperty("line.separator") + this.content.getBody());
             String contentType = this.content.getContentType();
             dlg.setContentType(contentType);
-            if (contentType.toLowerCase().startsWith("text/html")) {
-                dlg.setBody(EmailUtils.getQuotedBody(EmailUtils.Html2Text(this.content.getBody()), "text/plain", decodedTo, m.getSentDate()), "text/plain");
+            if (contentType.toLowerCase().startsWith(ContentTypes.TEXT_HTML)) {
+                dlg.setBody(EmailUtils.getQuotedBody(EmailUtils.Html2Text(this.content.getBody()), ContentTypes.TEXT_PLAIN, decodedTo, origM.getSentDate()), ContentTypes.TEXT_PLAIN);
             } else {
-                dlg.setBody(EmailUtils.getQuotedBody(this.content.getBody(), "text/plain", decodedTo, m.getSentDate()), "text/plain");
+                dlg.setBody(EmailUtils.getQuotedBody(this.content.getBody(), ContentTypes.TEXT_PLAIN, decodedTo, origM.getSentDate()), ContentTypes.TEXT_PLAIN);
             }
-            dlg.setBody(EmailUtils.getQuotedBody(this.content.getBody(), "text/html", decodedTo, m.getSentDate()), "text/html");
+            dlg.setBody(EmailUtils.getQuotedBody(this.content.getBody(), ContentTypes.TEXT_HTML, decodedTo, origM.getSentDate()), ContentTypes.TEXT_HTML);
 
-        } catch (MessagingException ex) {
+        } catch (Exception ex) {
             log.error(ex);
         }
 
@@ -950,8 +914,8 @@ public class ViewEmailDialog extends javax.swing.JDialog {
     }//GEN-LAST:event_cmdReplyAllActionPerformed
 
     private void cmdForwardActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmdForwardActionPerformed
-        SendEmailDialog dlg = new SendEmailDialog(EditorsRegistry.getInstance().getMainWindow(), false);
-        dlg.setArchiveFile(this.contextArchiveFile);
+        SendEmailDialog dlg = new SendEmailDialog(true, EditorsRegistry.getInstance().getMainWindow(), false);
+        dlg.setArchiveFile(this.contextArchiveFile, this.contextFolder);
         if(this.contextArchiveFile != null) {
             try {
                 ClientSettings settings = ClientSettings.getInstance();
@@ -969,6 +933,10 @@ public class ViewEmailDialog extends javax.swing.JDialog {
         MessageContainer msgC = this.msgContainer;
         try {
             Message m = msgC.getMessage();
+            MailboxSetup ms=EmailUtils.getMailboxSetup(m);
+            if(ms!=null) {
+                dlg.setFrom(ms);
+            }
             Address from = m.getFrom()[0];
 
             String subject = m.getSubject();
@@ -986,15 +954,14 @@ public class ViewEmailDialog extends javax.swing.JDialog {
             } catch (Throwable t) {
                 log.error(t);
             }
-            //dlg.setBody(System.getProperty("line.separator") + System.getProperty("line.separator") + "*** " + decodedFrom + " schrieb: ***" + System.getProperty("line.separator") + System.getProperty("line.separator") + this.content.getBody());
             String contentType = this.content.getContentType();
             dlg.setContentType(contentType);
-            if (contentType.toLowerCase().startsWith("text/html")) {
-                dlg.setBody(EmailUtils.getQuotedBody(EmailUtils.Html2Text(this.content.getBody()), "text/plain", decodedFrom, m.getSentDate()), "text/plain");
+            if (contentType.toLowerCase().startsWith(ContentTypes.TEXT_HTML)) {
+                dlg.setBody(EmailUtils.getQuotedBody(EmailUtils.Html2Text(this.content.getBody()), ContentTypes.TEXT_PLAIN, decodedFrom, m.getSentDate()), ContentTypes.TEXT_PLAIN);
             } else {
-                dlg.setBody(EmailUtils.getQuotedBody(this.content.getBody(), "text/plain", decodedFrom, m.getSentDate()), "text/plain");
+                dlg.setBody(EmailUtils.getQuotedBody(this.content.getBody(), ContentTypes.TEXT_PLAIN, decodedFrom, m.getSentDate()), ContentTypes.TEXT_PLAIN);
             }
-            dlg.setBody(EmailUtils.getQuotedBody(this.content.getBody(), "text/html", decodedFrom, m.getSentDate()), "text/html");
+            dlg.setBody(EmailUtils.getQuotedBody(this.content.getBody(), ContentTypes.TEXT_HTML, decodedFrom, m.getSentDate()), ContentTypes.TEXT_HTML);
             
             try {
                 // try forwarding attachments
@@ -1023,7 +990,7 @@ public class ViewEmailDialog extends javax.swing.JDialog {
                 log.error("Error forwarding attachments", t);
             }
 
-        } catch (MessagingException ex) {
+        } catch (Exception ex) {
             log.error(ex);
         }
 
@@ -1082,19 +1049,16 @@ public class ViewEmailDialog extends javax.swing.JDialog {
         /*
          * Create and display the dialog
          */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-
-            public void run() {
-                ViewEmailDialog dialog = new ViewEmailDialog(new javax.swing.JFrame(), true, null);
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
-                dialog.setVisible(true);
-            }
+        java.awt.EventQueue.invokeLater(() -> {
+            ViewEmailDialog dialog = new ViewEmailDialog(new javax.swing.JFrame(), null, null);
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    System.exit(0);
+                }
+            });
+            dialog.setVisible(true);
         });
     }
     // Variables declaration - do not modify//GEN-BEGIN:variables

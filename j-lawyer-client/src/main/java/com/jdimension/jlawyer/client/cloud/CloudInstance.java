@@ -665,6 +665,7 @@ package com.jdimension.jlawyer.client.cloud;
 
 import com.jdimension.jlawyer.client.utils.FileUtils;
 import com.jdimension.jlawyer.persistence.AppUserBean;
+import com.jdimension.jlawyer.security.Crypto;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -693,8 +694,27 @@ public class CloudInstance {
     private static CloudInstance instance = null;
     private NextcloudConnector con = null;
 
-    private CloudInstance(String serverName, boolean useHTTPS, int port, String userName, String password) {
+    private CloudInstance(String serverName, boolean useHTTPS, int port, String path, String userName, String password) {
         this.con = new NextcloudConnector(serverName, useHTTPS, port, userName, password);
+        if(path!=null && !"".equals(path)) {
+            con.setSubpathPrefix(path);
+        }
+    }
+    
+    public static boolean isConfigured(AppUserBean user) {
+        if (user.getCloudHost() == null || "".equals(user.getCloudHost())) {
+                return false;
+            }
+            if (user.getCloudUser() == null || "".equals(user.getCloudUser())) {
+                return false;
+            }
+            if (user.getCloudPassword() == null || "".equals(user.getCloudPassword())) {
+                return false;
+            }
+            if (user.getCloudPort() < 0) {
+                return false;
+            }
+            return true;
     }
 
     public static CloudInstance getInstance(AppUserBean user) {
@@ -712,7 +732,15 @@ public class CloudInstance {
                 return null;
             }
 
-            instance = new CloudInstance(user.getCloudHost(), user.isCloudSsl(), user.getCloudPort(), user.getCloudUser(), user.getCloudPassword());
+            String pwd=null;
+            try {
+                pwd=Crypto.decrypt(user.getCloudPassword());
+            } catch(Throwable t) {
+                log.error("Unable to decrypt Nextcloud password", t);
+                return null;
+            }
+            
+            instance = new CloudInstance(user.getCloudHost(), user.isCloudSsl(), user.getCloudPort(), user.getCloudPath(), user.getCloudUser(), pwd);
         }
         return instance;
     }

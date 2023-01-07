@@ -663,6 +663,10 @@
  */
 package com.jdimension.jlawyer.services;
 
+import com.jdimension.jlawyer.events.AddressCreatedEvent;
+import com.jdimension.jlawyer.events.AddressRemovedEvent;
+import com.jdimension.jlawyer.events.AddressTagChangedEvent;
+import com.jdimension.jlawyer.events.AddressUpdatedEvent;
 import com.jdimension.jlawyer.persistence.*;
 import com.jdimension.jlawyer.persistence.utils.JDBCUtils;
 import com.jdimension.jlawyer.persistence.utils.StringGenerator;
@@ -679,6 +683,8 @@ import java.util.List;
 import javax.annotation.Resource;
 import javax.annotation.security.RolesAllowed;
 import javax.ejb.*;
+import javax.enterprise.event.Event;
+import javax.inject.Inject;
 import org.apache.log4j.Logger;
 import org.jboss.ejb3.annotation.SecurityDomain;
 
@@ -690,7 +696,7 @@ import org.jboss.ejb3.annotation.SecurityDomain;
 @SecurityDomain("j-lawyer-security")
 public class AddressService implements AddressServiceRemote, AddressServiceLocal {
 
-    private static Logger log = Logger.getLogger(AddressService.class.getName());
+    private static final Logger log = Logger.getLogger(AddressService.class.getName());
 
     @Resource
     private SessionContext context;
@@ -703,6 +709,19 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
 
     @EJB
     private AddressTagsBeanFacadeLocal addressTagsFacade;
+
+    @EJB
+    private ContactSyncServiceLocal contactSync;
+
+    // custom hooks support
+    @Inject
+    Event<AddressCreatedEvent> newAddressEvent;
+    @Inject
+    Event<AddressRemovedEvent> removedAddressEvent;
+    @Inject
+    Event<AddressUpdatedEvent> updatedAddressEvent;
+    @Inject
+    Event<AddressTagChangedEvent> tagChangedEvent;
 
     private static final String PS_SEARCHENHANCED_2 = "select id from contacts where ucase(name) like ? or ucase(firstname) like ? or ucase(company) like ? or ucase(department) like ? or ucase(custom1) like ? or ucase(custom2) like ? or ucase(custom3) like ? or ucase(email) like ? or ucase(beaSafeId) like ? or ucase(phone) like ? or ucase(mobile) like ? or ucase(district) like ? or ucase(birthName) like ? or zipCode like ?";
 
@@ -730,6 +749,17 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
         dto.setLastModifier(context.getCallerPrincipal().getName());
         dto.setModificationDate(d);
         this.addressFacade.create(dto);
+
+        try {
+            this.contactSync.contactAdded(dto);
+        } catch (Throwable ex) {
+            log.error("Failed to sync added contact to cloud", ex);
+        }
+
+        AddressCreatedEvent evt = new AddressCreatedEvent();
+        evt.setAddressId(id);
+        this.newAddressEvent.fireAsync(evt);
+
         return this.addressFacade.find(dto.getId());
     }
 
@@ -737,16 +767,26 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
     @RolesAllowed({"writeAddressRole"})
     public void updateAddress(AddressBean dto) {
 
-//            AddressBean uDTO=this.addressFacade.find(dto.getId());
-//            
-//            uDTO.setLastModifier(context.getCallerPrincipal().getName());
-//            uDTO.setModificationDate(new Date());
-//            
-//            this.addressFacade.edit(uDTO);
+        // preserve the default role because the client does not provide it
+        // (it is not rendered in the UI and therefore not available in the dto)
+        AddressBean org=this.addressFacade.find(dto.getId());
+        String defaultRole=org.getDefaultRole();
+        dto.setDefaultRole(defaultRole);
+        
         dto.setLastModifier(context.getCallerPrincipal().getName());
         dto.setModificationDate(new Date());
 
         this.addressFacade.edit(dto);
+
+        try {
+            this.contactSync.contactUpdated(dto);
+        } catch (Throwable ex) {
+            log.error("Failed to sync updated contact to cloud", ex);
+        }
+
+        AddressUpdatedEvent evt = new AddressUpdatedEvent();
+        evt.setAddressId(dto.getId());
+        this.updatedAddressEvent.fireAsync(evt);
 
     }
 
@@ -764,27 +804,36 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
         }
 
         this.addressFacade.remove(dto);
+
+        try {
+            this.contactSync.contactDeleted(dto);
+        } catch (Throwable ex) {
+            log.error("Failed to sync deleted contact to cloud", ex);
+        }
+
+        AddressRemovedEvent evt = new AddressRemovedEvent();
+        evt.setAddressId(id);
+        this.removedAddressEvent.fireAsync(evt);
     }
 
     @Override
     @RolesAllowed({"readAddressRole"})
     public AddressBean[] searchSimple(String query) {
-        
-        if(query==null)
-            query="";
-        
-        query=query.trim();
-        if("".equalsIgnoreCase(query))
+
+        if (query == null) {
+            query = "";
+        }
+
+        query = query.trim();
+        if ("".equalsIgnoreCase(query)) {
             return new AddressBean[0];
-        
+        }
+
         JDBCUtils utils = new JDBCUtils();
-        Connection con = null;
         ResultSet rs = null;
-        PreparedStatement st = null;
-        ArrayList<AddressBean> list = new ArrayList<AddressBean>();
-        try {
-            con = utils.getConnection();
-            st = con.prepareStatement("select id from contacts where ucase(name) like ? or ucase(firstname) like ? or ucase(department) like ? or ucase(company) like ? or ucase(custom1) like ? or ucase(custom2) like ? or ucase(custom3) like ? or ucase(email) like ? or ucase(beaSafeId) like ? or ucase(phone) like ? or ucase(mobile) like ? or ucase(district) like ? or ucase(birthName) like ? or zipCode like ?");
+        ArrayList<AddressBean> list = new ArrayList<>();
+        try ( Connection con = utils.getConnection();  PreparedStatement st = con.prepareStatement("select id from contacts where ucase(name) like ? or ucase(firstname) like ? or ucase(department) like ? or ucase(company) like ? or ucase(custom1) like ? or ucase(custom2) like ? or ucase(custom3) like ? or ucase(email) like ? or ucase(beaSafeId) like ? or ucase(phone) like ? or ucase(mobile) like ? or ucase(district) like ? or ucase(birthName) like ? or zipCode like ?")) {
+
             String wildCard = "%" + StringUtils.germanToUpperCase(query) + "%";
             st.setString(1, wildCard);
             st.setString(2, wildCard);
@@ -802,32 +851,19 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
             st.setString(14, wildCard);
             rs = st.executeQuery();
 
-            //AddressLocalHome home=this.lookupAddressBean();
             while (rs.next()) {
                 String id = rs.getString(1);
-                //AddressLocal address=home.findByPrimaryKey(id);
                 AddressBean address = this.addressFacade.find(id);
                 list.add(address);
             }
         } catch (SQLException sqle) {
             log.error("Error finding addresses", sqle);
             throw new EJBException("Addressensuche konnte nicht ausgeführt werden.", sqle);
-//        } catch (FinderException fe) {
-//            log.error("Error finding address", fe);
-//            throw new EJBException("Addressensuche konnte nicht ausgeführt werden.", fe);
         } finally {
             try {
-                rs.close();
-            } catch (Throwable t) {
-                log.error(t);
-            }
-            try {
-                st.close();
-            } catch (Throwable t) {
-                log.error(t);
-            }
-            try {
-                con.close();
+                if (rs != null) {
+                    rs.close();
+                }
             } catch (Throwable t) {
                 log.error(t);
             }
@@ -847,16 +883,23 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
         dto.setLastModifier(context.getCallerPrincipal().getName());
         dto.setModificationDate(d);
         this.addressFacade.create(dto);
+
+        try {
+            this.contactSync.contactAdded(dto);
+        } catch (Throwable ex) {
+            log.error("Failed to sync added contact to cloud", ex);
+        }
+
+        AddressCreatedEvent evt = new AddressCreatedEvent();
+        evt.setAddressId(id);
+        this.newAddressEvent.fireAsync(evt);
     }
 
     @Override
     @RolesAllowed({"readAddressRole"})
     public boolean addressExists(String id) {
         Object o = this.addressFacade.find(id);
-        if (o == null) {
-            return false;
-        }
-        return true;
+        return o != null;
     }
 
     @Override
@@ -871,10 +914,9 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
         AddressBean ab = this.addressFacade.find(addressId);
         List check = this.addressTagsFacade.findByAddressKeyAndTagName(ab, tag.getTagName());
         StringGenerator idGen = new StringGenerator();
-        String historyText = "";
 
         if (active) {
-            if (check.size() == 0) {
+            if (check.isEmpty()) {
 
                 String tagId = idGen.getID().toString();
                 tag.setId(tagId);
@@ -890,7 +932,12 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
             }
         }
 
-        return;
+        AddressTagChangedEvent evt = new AddressTagChangedEvent();
+        evt.setAddressId(addressId);
+        evt.setActive(active);
+        evt.setTagName(tag.getTagName());
+        this.tagChangedEvent.fireAsync(evt);
+
     }
 
     @Override
@@ -906,14 +953,8 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
     @RolesAllowed({"loginRole"})
     public List<String> searchTagsInUse() {
         JDBCUtils utils = new JDBCUtils();
-        Connection con = null;
-        ResultSet rs = null;
-        PreparedStatement st = null;
-        ArrayList<String> list = new ArrayList<String>();
-        try {
-            con = utils.getConnection();
-            st = con.prepareStatement("select distinct(tagName) from contact_tags order by tagName asc");
-            rs = st.executeQuery();
+        ArrayList<String> list = new ArrayList<>();
+        try ( Connection con = utils.getConnection();  PreparedStatement st = con.prepareStatement("select distinct(tagName) from contact_tags order by tagName asc");  ResultSet rs = st.executeQuery()) {
 
             while (rs.next()) {
                 String t = rs.getString(1);
@@ -922,22 +963,6 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
         } catch (SQLException sqle) {
             log.error("Error finding tags in use", sqle);
             throw new EJBException("Aktuelle genutzte Tags konnten nicht gefunden werden.", sqle);
-        } finally {
-            try {
-                rs.close();
-            } catch (Throwable t) {
-                log.error(t);
-            }
-            try {
-                st.close();
-            } catch (Throwable t) {
-                log.error(t);
-            }
-            try {
-                con.close();
-            } catch (Throwable t) {
-                log.error(t);
-            }
         }
 
         return list;
@@ -946,14 +971,14 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
     @Override
     @RolesAllowed({"readAddressRole"})
     public AddressBean[] searchEnhanced(String query, String[] tagName) {
-        
-        if(query==null)
-            query="";
-        
-        query=query.trim();
-        
+
+        if (query == null) {
+            query = "";
+        }
+
+        query = query.trim();
+
         JDBCUtils utils = new JDBCUtils();
-        Connection con = null;
         ResultSet rs = null;
         PreparedStatement st = null;
 
@@ -967,9 +992,9 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
 
         }
 
-        ArrayList<AddressBean> list = new ArrayList<AddressBean>();
-        try {
-            con = utils.getConnection();
+        ArrayList<AddressBean> list = new ArrayList<>();
+        ArrayList<String> idList = new ArrayList<>();
+        try ( Connection con = utils.getConnection()) {
 
             if (withTag) {
 
@@ -995,7 +1020,6 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
                 st.setString(12, wildCard);
                 st.setString(13, wildCard);
                 st.setString(14, wildCard);
-                //st.setString(10, tag);
                 int index = 15;
                 for (String t : tagName) {
                     st.setString(index, t);
@@ -1022,32 +1046,29 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
             }
             rs = st.executeQuery();
 
-            //AddressLocalHome home=this.lookupAddressBean();
             while (rs.next()) {
                 String id = rs.getString(1);
-                //AddressLocal address=home.findByPrimaryKey(id);
-                AddressBean address = this.addressFacade.find(id);
-                list.add(address);
+                if (!idList.contains(id)) {
+                    AddressBean address = this.addressFacade.find(id);
+                    list.add(address);
+                    idList.add(id);
+                }
             }
         } catch (SQLException sqle) {
             log.error("Error finding addresses", sqle);
             throw new EJBException("Addressensuche konnte nicht ausgeführt werden.", sqle);
-//        } catch (FinderException fe) {
-//            log.error("Error finding address", fe);
-//            throw new EJBException("Addressensuche konnte nicht ausgeführt werden.", fe);
         } finally {
             try {
-                rs.close();
+                if (rs != null) {
+                    rs.close();
+                }
             } catch (Throwable t) {
                 log.error(t);
             }
             try {
-                st.close();
-            } catch (Throwable t) {
-                log.error(t);
-            }
-            try {
-                con.close();
+                if (st != null) {
+                    st.close();
+                }
             } catch (Throwable t) {
                 log.error(t);
             }
@@ -1059,14 +1080,14 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
     @Override
     @RolesAllowed({"readAddressRole"})
     public Hashtable<String, ArrayList<String>> searchTagsEnhanced(String query, String[] tagName) {
-        
-        if(query==null)
-            query="";
-        
-        query=query.trim();
-        
+
+        if (query == null) {
+            query = "";
+        }
+
+        query = query.trim();
+
         JDBCUtils utils = new JDBCUtils();
-        Connection con = null;
         ResultSet rs = null;
         PreparedStatement st = null;
 
@@ -1080,9 +1101,8 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
 
         }
 
-        Hashtable<String, ArrayList<String>> list = new Hashtable<String, ArrayList<String>>();
-        try {
-            con = utils.getConnection();
+        Hashtable<String, ArrayList<String>> list = new Hashtable<>();
+        try ( Connection con = utils.getConnection();) {
 
             if (withTag) {
 
@@ -1107,7 +1127,7 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
                 st.setString(11, wildCard);
                 st.setString(12, wildCard);
                 st.setString(13, wildCard);
-                //st.setString(10, tag);
+
                 int index = 14;
                 for (String t : tagName) {
                     st.setString(index, t);
@@ -1133,12 +1153,11 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
             }
             rs = st.executeQuery();
 
-            //AddressLocalHome home=this.lookupAddressBean();
             while (rs.next()) {
                 String id = rs.getString(1);
                 String tag = rs.getString(2);
                 if (!list.containsKey(id)) {
-                    list.put(id, new ArrayList<String>());
+                    list.put(id, new ArrayList<>());
                 }
                 ArrayList<String> tagList = list.get(id);
                 tagList.add(tag);
@@ -1146,22 +1165,18 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
         } catch (SQLException sqle) {
             log.error("Error finding addresses", sqle);
             throw new EJBException("Addressensuche konnte nicht ausgeführt werden.", sqle);
-//        } catch (FinderException fe) {
-//            log.error("Error finding address", fe);
-//            throw new EJBException("Addressensuche konnte nicht ausgeführt werden.", fe);
         } finally {
             try {
-                rs.close();
+                if (rs != null) {
+                    rs.close();
+                }
             } catch (Throwable t) {
                 log.error(t);
             }
             try {
-                st.close();
-            } catch (Throwable t) {
-                log.error(t);
-            }
-            try {
-                con.close();
+                if (st != null) {
+                    st.close();
+                }
             } catch (Throwable t) {
                 log.error(t);
             }
@@ -1173,29 +1188,32 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
     @Override
     @RolesAllowed({"writeAddressRole"})
     public void renameTag(String fromName, String toName) throws Exception {
-        StringGenerator idGen = new StringGenerator();
-
         List<AddressTagsBean> tags = this.addressTagsFacade.findByTagName(fromName);
         for (AddressTagsBean t : tags) {
             t.setTagName(toName);
             this.addressTagsFacade.edit(t);
 
+            AddressTagChangedEvent evt = new AddressTagChangedEvent();
+            evt.setAddressId(t.getAddressKey().getId());
+            evt.setActive(false);
+            evt.setTagName(fromName);
+            this.tagChangedEvent.fireAsync(evt);
+
+            AddressTagChangedEvent evt2 = new AddressTagChangedEvent();
+            evt2.setAddressId(t.getAddressKey().getId());
+            evt2.setActive(true);
+            evt2.setTagName(toName);
+            this.tagChangedEvent.fireAsync(evt2);
+            
         }
     }
 
     @Override
     public ArrayList<String> getAllAddressIds() {
         JDBCUtils utils = new JDBCUtils();
-        Connection con = null;
-        ResultSet rs = null;
-        PreparedStatement st = null;
-        ArrayList<String> list = new ArrayList<String>();
-        try {
-            con = utils.getConnection();
-            st = con.prepareStatement("select id from contacts");
-            rs = st.executeQuery();
+        ArrayList<String> list = new ArrayList<>();
+        try ( Connection con = utils.getConnection();  PreparedStatement st = con.prepareStatement("select id from contacts");  ResultSet rs = st.executeQuery()) {
 
-            //ArchiveFileLocalHome home = this.lookupArchiveFileBean();
             while (rs.next()) {
                 String id = rs.getString(1);
                 list.add(id);
@@ -1203,27 +1221,32 @@ public class AddressService implements AddressServiceRemote, AddressServiceLocal
         } catch (SQLException sqle) {
             log.error("Error finding addresses", sqle);
             throw new EJBException("Adressensuche konnte nicht ausgeführt werden.", sqle);
-//        } catch (FinderException fe) {
-//            log.error("Error finding archive file", fe);
-//            throw new EJBException("Aktensuche konnte nicht ausgeführt werden.", fe);
-        } finally {
-            try {
-                rs.close();
-            } catch (Throwable t) {
-                log.error(t);
-            }
-            try {
-                st.close();
-            } catch (Throwable t) {
-                log.error(t);
-            }
-            try {
-                con.close();
-            } catch (Throwable t) {
-                log.error(t);
-            }
         }
 
         return list;
+    }
+
+    @Override
+    @RolesAllowed({"adminRole"})
+    public void runFullAddressBookSync() {
+        this.contactSync.runFullAddressBookSync();
+    }
+
+    @Override
+    @RolesAllowed({"writeAddressRole"})
+    public void deleteContactTagById(String tagId) throws Exception {
+        AddressTagsBean tag=this.addressTagsFacade.find(tagId);
+        if(tag!=null)
+            this.addressTagsFacade.remove(tag);
+    }
+
+    @Override
+    @RolesAllowed({"readAddressRole"})
+    public void setDefaultRole(String addressId, String defaultRole) throws Exception {
+        AddressBean ab=this.addressFacade.find(addressId);
+        if(ab!=null) {
+            ab.setDefaultRole(defaultRole);
+            this.addressFacade.edit(ab);
+        }
     }
 }

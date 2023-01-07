@@ -663,17 +663,8 @@
  */
 package com.jdimension.jlawyer.client.editors;
 
-import com.jdimension.jlawyer.client.desktop.DesktopPanel;
-import com.jdimension.jlawyer.client.settings.ClientSettings;
-import com.jdimension.jlawyer.server.constants.MonitoringConstants;
-import com.jdimension.jlawyer.client.utils.SystrayUtils;
 import com.jdimension.jlawyer.client.utils.ThreadUtils;
-import com.jdimension.jlawyer.client.utils.VersionUtils;
 import java.awt.Component;
-import java.awt.Desktop;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
-import java.net.URI;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -688,9 +679,9 @@ public class EditorsRegistry {
     private static EditorsRegistry instance = null;
     private static final String STATUS_READY = java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/editors/EditorsRegistry").getString("status.ready");
     private HashMap editors;
-    private JScrollPane pane;
+    private JPanel pane = null;
     private JLabel statusLabel;
-    
+
     private Timer timer = null;
     private JFrame mainWindow = null;
 
@@ -710,7 +701,7 @@ public class EditorsRegistry {
         }
         return instance;
     }
-
+    
     public Object getEditor(String editorClass) throws ClassNotFoundException, InstantiationException, IllegalAccessException {
         if (!(this.editors.containsKey(editorClass))) {
             Object editor = Class.forName(editorClass).newInstance();
@@ -719,15 +710,11 @@ public class EditorsRegistry {
         return this.editors.get(editorClass);
     }
 
-    public void setMainEditorsPane(JScrollPane pane) {
-        this.pane = pane;
-    }
-    
-    public void setMainEditorsPaneHorizontalScrolling(boolean enabled) {
-        this.pane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+    public void setMainEditorsPane(JPanel panel) {
+        this.pane = panel;
     }
 
-    public JScrollPane getMainEditorsPane() {
+    public JPanel getMainEditorsPane() {
         return this.pane;
     }
 
@@ -736,33 +723,24 @@ public class EditorsRegistry {
             return null;
         }
 
-        if (this.pane.getViewport() == null) {
+        if (this.pane.getComponentCount() != 1) {
             return null;
         }
 
-        if (this.pane.getViewport().getView() == null) {
-            return null;
-        }
-
-        
-        return this.pane.getViewport().getView();
+        return this.pane.getComponent(0);
     }
-    
+
     public boolean isEditorActive(String editorClass) {
         if (this.pane == null) {
             return false;
         }
 
-        if (this.pane.getViewport() == null) {
+        if (this.pane.getComponentCount() != 1) {
             return false;
         }
 
-        if (this.pane.getViewport().getView() == null) {
-            return false;
-        }
-
-        if (editorClass != null && this.pane.getViewport().getView() != null) {
-            if (editorClass.equals(this.pane.getViewport().getView().getClass().getName())) {
+        if (editorClass != null) {
+            if (editorClass.equals(this.pane.getComponent(0).getClass().getName())) {
                 return true;
             }
         }
@@ -770,36 +748,59 @@ public class EditorsRegistry {
     }
 
     public void setMainEditorsPaneView(Component c) {
+        this.setMainEditorsPaneView(c, false);
+    }
+
+    public void setMainEditorsPaneView(Component c, boolean skipReset) {
         if (this.pane == null) {
             return;
         }
 
-        if (c != null && this.pane.getViewport().getView() != null) {
-            if (c == this.pane.getViewport().getView()) {
+        if (c != null && this.pane.getComponentCount() == 1) {
+            if (c == this.pane.getComponent(0)) {
+
                 return;
             }
         }
+        
+        if (this.pane.getComponentCount() == 1) {
+            Component currentEd = this.pane.getComponent(0);
+            if (currentEd instanceof SelfValidatingEditor) {
+                SelfValidatingEditor se = (SelfValidatingEditor) currentEd;
+                if (!se.isDataValid()) {
+                    return;
+                }
+            }
+        }
 
-        Component currentEd = this.pane.getViewport().getView();
         boolean saved = true;
-        if (currentEd instanceof SaveableEditor) {
-            SaveableEditor se = (SaveableEditor) currentEd;
-            if (se.isDirty()) {
-                int ret = JOptionPane.showConfirmDialog(this.getMainWindow(), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/editors/EditorsRegistry").getString("dialog.savebeforeexit"), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/editors/EditorsRegistry").getString("dialog.savebeforeexit.title"), JOptionPane.YES_NO_OPTION);
-                if (ret == JOptionPane.YES_OPTION) {
-                    saved = se.save();
+        if (this.pane.getComponentCount() == 1) {
+            Component currentEd = this.pane.getComponent(0);
+            if (currentEd instanceof SaveableEditor) {
+                SaveableEditor se = (SaveableEditor) currentEd;
+                if (se.isDirty()) {
+                    int ret = JOptionPane.showConfirmDialog(this.getMainWindow(), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/editors/EditorsRegistry").getString("dialog.savebeforeexit"), java.util.ResourceBundle.getBundle("com/jdimension/jlawyer/client/editors/EditorsRegistry").getString("dialog.savebeforeexit.title"), JOptionPane.YES_NO_OPTION);
+                    if (ret == JOptionPane.YES_OPTION) {
+                        saved = se.save();
+                    }
                 }
             }
         }
 
         //c.doLayout();
         if (saved) {
-            this.pane.setViewportView(c);
+            //this.pane.setViewportView(c);
+            this.pane.removeAll();
+            this.pane.add(c);
+            this.pane.revalidate();
+            this.pane.repaint();
         }
-        
-        if (c instanceof ResetOnDisplayEditor) {
-            if (((ResetOnDisplayEditor) c).needsReset()) {
-                ((ResetOnDisplayEditor) c).reset();
+
+        if (!skipReset) {
+            if (c instanceof ResetOnDisplayEditor) {
+                if (((ResetOnDisplayEditor) c).needsReset()) {
+                    ((ResetOnDisplayEditor) c).reset();
+                }
             }
         }
     }
@@ -813,11 +814,11 @@ public class EditorsRegistry {
     }
 
     public void clearStatus() {
-        this.updateStatus(this.STATUS_READY);
+        this.updateStatus(EditorsRegistry.STATUS_READY);
     }
 
     public void clearStatus(boolean newThread) {
-        this.updateStatus(this.STATUS_READY, newThread);
+        this.updateStatus(EditorsRegistry.STATUS_READY, newThread);
     }
 
     public void updateStatus(String text, boolean newThread) {
@@ -843,6 +844,7 @@ public class EditorsRegistry {
             this.newText = newText;
         }
 
+        @Override
         public void run() {
             ThreadUtils.updateLabel(statusLabel, this.newText);
         }

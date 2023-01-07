@@ -663,12 +663,19 @@
  */
 package com.jdimension.jlawyer.documents;
 
+import groovy.lang.GroovyClassLoader;
+import groovy.lang.GroovyObject;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Enumeration;
-import java.util.Hashtable;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import org.apache.log4j.Logger;
 import org.jlawyer.plugins.calculation.CalculationTable;
 import org.jlawyer.plugins.calculation.Cell;
@@ -695,20 +702,19 @@ import org.w3c.dom.Node;
  */
 public class LibreOfficeAccess {
 
-    private static Logger log = Logger.getLogger(LibreOfficeAccess.class.getName());
+    private static final Logger log = Logger.getLogger(LibreOfficeAccess.class.getName());
+    private static final String ERROR_MAYBE_HEADLESS = "Failure setting content of table cell - when running on a headless Linux system, please install xvfb libxext6 libxi6 libxtst6 libxrender1 libongoft2-1.0.0";
 
-    public static void setPlaceHolders(String file, Hashtable values) throws Exception {
+    public static void setPlaceHolders(String caseId, String fileInFileSystem, String fileName, HashMap<String,Object> values, ArrayList<String> formsPrefixes) throws Exception {
 
-        if (file.toLowerCase().endsWith(".odt")) {
+        if (fileName.toLowerCase().endsWith(".odt")) {
             TextDocument outputOdt;
-            outputOdt = TextDocument.loadDocument(file);
+            outputOdt = TextDocument.loadDocument(fileInFileSystem);
 
-            ArrayList<Node> removalParents = new ArrayList<Node>();
-            ArrayList<Node> removalChildren = new ArrayList<Node>();
+            ArrayList<Node> removalParents = new ArrayList<>();
+            ArrayList<Node> removalChildren = new ArrayList<>();
 
-            Enumeration en = values.keys();
-            while (en.hasMoreElements()) {
-                String key = (String) en.nextElement();
+            for (String key: values.keySet()) {
                 if (values.get(key) == null) {
                     values.put(key, "");
                 }
@@ -738,7 +744,7 @@ public class LibreOfficeAccess {
                                 item.replaceWith(value);
 
                             } catch (Throwable t) {
-                                log.error("Error replacing " + regExKey + " with " + value + " in " + file, t);
+                                log.error("Error replacing " + regExKey + " with " + value + " in " + fileInFileSystem, t);
                             }
                         }
                     }
@@ -760,13 +766,11 @@ public class LibreOfficeAccess {
 
                         try {
                             TextSelection item = (TextSelection) search.nextSelection();
-                            boolean containsn = item.getElement().getTextContent().contains("\n");
-                            boolean containsrn = item.getElement().getTextContent().contains("\r\n");
                             item.replaceWith(value);
 
                             // remove empty chars and the line break until a line break occurs or a different character
-                            ArrayList<Node> removalElements = new ArrayList<Node>();
-                            ArrayList<Node> removalItems = new ArrayList<Node>();
+                            ArrayList<Node> removalElements = new ArrayList<>();
+                            ArrayList<Node> removalItems = new ArrayList<>();
                             for (int itemIndex = 0; itemIndex < item.getElement().getLength(); itemIndex++) {
                                 if (item.getElement().item(itemIndex) instanceof TextLineBreakElement) {
                                     //item.getElement().removeChild(item.getElement().item(itemIndex));
@@ -802,7 +806,7 @@ public class LibreOfficeAccess {
                                 removalChildren.add(item.getElement());
                             }
                         } catch (Throwable t) {
-                            log.error("Error replacing " + regExKey + " with " + value + " in " + file, t);
+                            log.error("Error replacing " + regExKey + " with " + value + " in " + fileInFileSystem, t);
                         }
 
                     }
@@ -825,7 +829,11 @@ public class LibreOfficeAccess {
                                     firstDataRow = 1;
                                     t.appendRow();
                                     for (int i = 0; i < tab.getColumnLabels().size(); i++) {
-                                        t.getCellByPosition(i, 0).setStringValue(tab.getColumnLabels().get(i));
+                                        try {
+                                            t.getCellByPosition(i, 0).setStringValue(tab.getColumnLabels().get(i));
+                                        } catch (Throwable thr) {
+                                            log.error(ERROR_MAYBE_HEADLESS, thr);
+                                        }
                                         border.setColor(Color.WHITE);
                                         t.getCellByPosition(i, 0).setBorders(CellBordersType.NONE, border);
                                         t.getCellByPosition(i, 0).setHorizontalAlignment(StyleTypeDefinitions.HorizontalAlignmentType.CENTER);
@@ -836,7 +844,11 @@ public class LibreOfficeAccess {
                                 }
                                 for (int i = 0; i < tab.getData()[0].length; i++) {
                                     for (int k = 0; k < tab.getData().length; k++) {
-                                        t.getCellByPosition(i, k + firstDataRow).setStringValue(tab.getData()[k][i]);
+                                        try {
+                                            t.getCellByPosition(i, k + firstDataRow).setStringValue(tab.getData()[k][i]);
+                                        } catch (Throwable thr) {
+                                            log.error(ERROR_MAYBE_HEADLESS, thr);
+                                        }
                                         border.setColor(Color.WHITE);
                                         t.getCellByPosition(i, k + firstDataRow).setBorders(CellBordersType.NONE, border);
                                         // set font to regular
@@ -889,7 +901,14 @@ public class LibreOfficeAccess {
 
                                 for (int i = 0; i < tab.getColumnCount(); i++) {
                                     for (int k = 0; k < tab.getRowCount(); k++) {
-                                        t.getCellByPosition(i, k).setStringValue(tab.getValueAt(k, i));
+                                        // this may fail when running on a headless system
+                                        // need to install these packages on Ubuntu: xvfb libxext6 libxi6 libxtst6 libxrender1 libongoft2-1.0.0
+                                        // in case of an exception, continue with the other placeholders
+                                        try {
+                                            t.getCellByPosition(i, k).setStringValue(tab.getValueAt(k, i));
+                                        } catch (Throwable thr) {
+                                            log.error(ERROR_MAYBE_HEADLESS, thr);
+                                        }
                                         if (tab.isLineBorder()) {
                                             Border b = new Border(Color.BLACK, 0.05, SupportedLinearMeasure.PT);
                                             b.setColor(new org.odftoolkit.odfdom.type.Color(tab.getBorderColor()));
@@ -959,17 +978,25 @@ public class LibreOfficeAccess {
                 }
             }
 
-            outputOdt.save(new File(file));
+            // replace script placeholders
+            String scriptRegExKey = "\\[\\[SCRIPT:[^\\]]*\\]\\]";
+            TextNavigation search = new TextNavigation(scriptRegExKey, outputOdt);
+            while (search.hasNext()) {
+                TextSelection item = (TextSelection) search.nextSelection();
+                String scriptContent = item.getText();
+                String scriptResult = evaluateScript(caseId, scriptContent, values, formsPrefixes);
+                item.replaceWith(scriptResult);
+
+            }
+
+            outputOdt.save(new File(fileInFileSystem));
             outputOdt.close();
 
-        } else if (file.toLowerCase().endsWith(".ods")) {
+        } else if (fileName.toLowerCase().endsWith(".ods")) {
             SpreadsheetDocument outputOds;
-            outputOds = SpreadsheetDocument.loadDocument(file);
+            outputOds = SpreadsheetDocument.loadDocument(fileInFileSystem);
 
-            Enumeration en = values.keys();
-            while (en.hasMoreElements()) {
-
-                String key = (String) en.nextElement();
+            for (String key: values.keySet()) {
 
                 // if the placeholder is followed by one of these characters, do not append a space
                 String[] trailingCharsRegex = new String[]{"\\.", ",", ";", ":", "!", "\\?", "'", "\"", " "};
@@ -993,7 +1020,7 @@ public class LibreOfficeAccess {
 
                             item.replaceWith(value);
                         } catch (Throwable t) {
-                            log.error("Error replacing " + regExKey + " with " + value + " in " + file, t);
+                            log.error("Error replacing " + regExKey + " with " + value + " in " + fileInFileSystem, t);
                         }
                     }
                 }
@@ -1015,30 +1042,25 @@ public class LibreOfficeAccess {
 
                         item.replaceWith(value);
                     } catch (Throwable t) {
-                        log.error("Error replacing " + regExKey + " with " + value + " in " + file, t);
+                        log.error("Error replacing " + regExKey + " with " + value + " in " + fileInFileSystem, t);
                     }
                 }
 
             }
 
-            outputOds.save(new File(file));
+            outputOds.save(new File(fileInFileSystem));
             outputOds.close();
-        } else if (file.toLowerCase().endsWith(".docx")) {
-            MicrosoftOfficeAccess.setPlaceHolders(file, values);
+        } else if (fileName.toLowerCase().endsWith(".docx")) {
+            MicrosoftOfficeAccess.setPlaceHolders(caseId, fileInFileSystem, fileName, values, formsPrefixes);
         }
 
-    }
-
-    private static Font newFontInstance(Font f) {
-        Font newFont = new Font(f.getFamilyName(), f.getFontStyle(), f.getSize());
-        return newFont;
     }
 
     public static java.util.List<String> getPlaceHolders(String file, List<String> allPartyTypesPlaceHolders, Collection<String> formsPlaceHolders) throws Exception {
 
         if (file.toLowerCase().endsWith(".odt")) {
             TextDocument outputOdt;
-            ArrayList<String> resultList = new ArrayList<String>();
+            ArrayList<String> resultList = new ArrayList<>();
             outputOdt = TextDocument.loadDocument(file);
 
             for (String r : PlaceHolders.getAllPlaceHolders(allPartyTypesPlaceHolders, formsPlaceHolders)) {
@@ -1060,7 +1082,6 @@ public class LibreOfficeAccess {
 //                        resultList.add(key);
 //                    }
 //                }
-
             }
 
             List<Table> allTables = outputOdt.getTableList();
@@ -1074,12 +1095,33 @@ public class LibreOfficeAccess {
                 }
             }
 
+            //String scriptRegExKey = "(?s)\\[\\[SCRIPT\\:.*\\]\\]";
+            String scriptRegExKey = "(?s)\\[\\[SCRIPT\\:[.\\s\\S\\r\\n]*\\]\\]";
+            //String scriptRegExKey = "(?s)\\[\\[SCRIPT\\:[\\s\\S]*\\]\\]";
+            //String scriptRegExKey = "(?s)\\[\\[SCRIPT\\:.*?\\]\\]";
+
+            TextNavigation search = new TextNavigation(scriptRegExKey, outputOdt);
+            while (search.hasNext()) {
+                TextSelection item = (TextSelection) search.nextSelection();
+                String itemText = item.getText();
+                resultList.add(itemText);
+
+                // within the script, the placeholders are contianed without {{ }}
+                // need to look up such occurrences and add placeholders for them in the result list
+                for (String r : PlaceHolders.getAllPlaceHolders(allPartyTypesPlaceHolders, formsPlaceHolders)) {
+                    String key = r.substring(2, r.length() - 2);
+                    if (itemText.contains(key) && !resultList.contains(r)) {
+                        resultList.add(r);
+                    }
+                }
+            }
+
             outputOdt.close();
             return resultList;
         } else if (file.toLowerCase().endsWith(".ods")) {
 
             SpreadsheetDocument outputOds;
-            ArrayList<String> resultList = new ArrayList<String>();
+            ArrayList<String> resultList = new ArrayList<>();
 
             outputOds = SpreadsheetDocument.loadDocument(file);
             for (String r : PlaceHolders.getAllPlaceHolders(allPartyTypesPlaceHolders, formsPlaceHolders)) {
@@ -1091,32 +1133,100 @@ public class LibreOfficeAccess {
                     resultList.add(r);
                 }
 
-
             }
 
             outputOds.close();
             return resultList;
         } else if (file.toLowerCase().endsWith(".docx")) {
 
-            Hashtable<Integer,CTR> tfCache=new Hashtable<>();
+            HashMap<Integer, CTR> tfCache = new HashMap<>();
             return new ArrayList(MicrosoftOfficeAccess.getPlaceHolders(file, allPartyTypesPlaceHolders, formsPlaceHolders, tfCache));
 
         }
 
-        return new ArrayList<String>();
+        return new ArrayList<>();
 
     }
 
-    private static void findPlaceHolders(List<String> allPartyTypesPlaceHolders, Collection<String> formsPlaceHolders, String content, java.util.List<String> results) {
-        for (String r : PlaceHolders.getAllPlaceHolders(allPartyTypesPlaceHolders, formsPlaceHolders)) {
-            if (content.indexOf(r) > -1) {
-                if (!results.contains(r)) {
-                    results.add(r);
+    protected static String evaluateScript(String caseId, String scriptContent, HashMap<String,Object> values, ArrayList<String> formsPrefixes) {
+        if (scriptContent.startsWith("[[SCRIPT:")) {
+            scriptContent = scriptContent.substring(9);
+        }
+        if (scriptContent.endsWith("]]")) {
+            scriptContent = scriptContent.substring(0, scriptContent.length() - 2);
+        }
+        scriptContent = scriptContent.trim();
+
+        Set<String> valueKeys = values.keySet();
+        
+        // need to sort by key length descending
+        // e.g. to prevent MANDANT_ORT from replacing the value for MANDANT_ORTSTEIL
+        List<String> lengthSortedValueKeys=new ArrayList<>(valueKeys);
+        Collections.sort(lengthSortedValueKeys, (Object arg0, Object arg1) -> {
+            if(arg0==null)
+                arg0="";
+            if(arg1==null)
+                arg1="";
+            return Integer.compare(arg1.toString().length(), arg0.toString().length());
+        });
+        
+        for (String scriptPlaceHolderKey: lengthSortedValueKeys) {
+            if (scriptPlaceHolderKey.startsWith("{{") && scriptPlaceHolderKey.endsWith("}}")) {
+                String scriptPlaceHolderValue = values.get(scriptPlaceHolderKey).toString();
+                scriptPlaceHolderKey = scriptPlaceHolderKey.substring(2);
+                scriptPlaceHolderKey = scriptPlaceHolderKey.substring(0, scriptPlaceHolderKey.length() - 2);
+                scriptContent = scriptContent.replaceAll(scriptPlaceHolderKey, "\"" + scriptPlaceHolderValue + "\"");
+            }
+        }
+        scriptContent = scriptContent.replace("„", "\"");
+        scriptContent = scriptContent.replace("“", "\"");
+
+        // required for "WENNVORHANDEN"
+        // scriptContent = scriptContent.replace("\"\"", "\"");
+
+        try ( InputStream is = LibreOfficeAccess.class.getResourceAsStream("/templates/smart/smarttemplate.groovy");  InputStreamReader isr = new InputStreamReader(is);  BufferedReader br = new BufferedReader(isr);) {
+
+            StringBuilder sb = new StringBuilder();
+            String line = br.readLine();
+            while (line != null) {
+                sb.append(line).append(System.lineSeparator());
+                line = br.readLine();
+            }
+
+            String myclass = sb.toString();
+            myclass = myclass.replace("SMARTTEMPLATESCRIPT", scriptContent);
+            myclass = myclass.replace("SMARTTEMPLATECASEID", caseId);
+
+            StringBuilder allFormPrefixes = new StringBuilder();
+            if (formsPrefixes != null) {
+                for (String fp : formsPrefixes) {
+                    allFormPrefixes.append("-").append(fp).append("-");
                 }
             }
+            myclass = myclass.replace("ALLFORMPREFIXES", allFormPrefixes.toString());
+
+            GroovyClassLoader gcl = new GroovyClassLoader();
+            Class calcClass = gcl.parseClass(myclass);
+            GroovyObject calc = (GroovyObject) calcClass.newInstance();
+            return (String) calc.invokeMethod("evaluateScript", new Object[]{});
+        } catch (Throwable t) {
+            log.error("Unable to evaluate smart template script", t);
+            log.error("****************************************");
+            log.error(scriptContent);
+            log.error("****************************************");
+            return "SCRIPTFEHLER: " + t.getMessage();
         }
     }
 
+//    private static void findPlaceHolders(List<String> allPartyTypesPlaceHolders, Collection<String> formsPlaceHolders, String content, java.util.List<String> results) {
+//        for (String r : PlaceHolders.getAllPlaceHolders(allPartyTypesPlaceHolders, formsPlaceHolders)) {
+//            if (content.contains(r)) {
+//                if (!results.contains(r)) {
+//                    results.add(r);
+//                }
+//            }
+//        }
+//    }
 //    private static String replacePlaceHolders(String content, Hashtable values) {
 //        Enumeration en = values.keys();
 //        while (en.hasMoreElements()) {
@@ -1135,7 +1245,7 @@ public class LibreOfficeAccess {
     public static void main(String[] args) {
         SpreadsheetDocument outputOds;
 
-        ArrayList<String> resultList = new ArrayList<String>();
+        ArrayList<String> resultList = new ArrayList<>();
 
         try {
 
@@ -1149,8 +1259,6 @@ public class LibreOfficeAccess {
                     resultList.add(r);
                 }
 
-                
-
             }
 
             //outputOdt.save("HelloWAC.odt");
@@ -1160,13 +1268,11 @@ public class LibreOfficeAccess {
 
             outputOds = SpreadsheetDocument.loadDocument("/home/jens/temp/j-lawyer.org/j-lawyer.ods");
 
-            Hashtable values = new Hashtable();
+            HashMap<String,Object> values = new HashMap<>();
             values.put("{{PROFIL_EMAIL}}", "jens.kutschke@waat???");
             values.put("{{MANDANT_STRASSE}}", "jens.kutschke strasse");
 
-            Enumeration en = values.keys();
-            while (en.hasMoreElements()) {
-                String key = (String) en.nextElement();
+            for (String key: values.keySet()) {
                 String regExKey = "\\{\\{" + key.substring(2, key.length() - 2) + "\\}\\}\\.";
                 String value = (String) values.get(key);
                 if (value == null) {
@@ -1206,7 +1312,7 @@ public class LibreOfficeAccess {
             outputOds.close();
 
         } catch (Throwable t) {
-            t.printStackTrace();
+            log.error(t);
         }
 
     }
