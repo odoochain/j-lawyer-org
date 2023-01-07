@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="eclipselink-jpa-modelgen-2.3.0">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/eclipselinkmodelgen/eclipselink-jpa-modelgen-2.3.0.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

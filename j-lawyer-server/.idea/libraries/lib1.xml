@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="lib1">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/build/lib/flyway-core-5.2.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/build/lib/j-lawyer-server-common.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

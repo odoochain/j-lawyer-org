@@ -720,11 +720,11 @@ public class RestoreExecutor {
 
     public void validateEncoding(BackupProgressCallback progress) throws Exception {
         if (progress != null) {
-            progress.onProgress("Prüfe Kodierung...");
+            progress.onProgress("Check coding...");
         }
         File metadataDir = new File(this.backupDirectory + File.separator + ".metadata");
         if (!metadataDir.exists()) {
-            throw new Exception("Datensicherungsinformationen (Metadaten) fehlen!");
+            throw new Exception("Backup information (metadata) is missing!");
         }
 
         for (File meta : metadataDir.listFiles()) {

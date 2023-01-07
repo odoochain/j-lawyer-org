@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/j-lawyer-backupmgr/j-lawyer-backupmgr.iml" filepath="$PROJECT_DIR$/j-lawyer-backupmgr/j-lawyer-backupmgr.iml" />
+      <module fileurl="file://$PROJECT_DIR$/j-lawyer-cloud/j-lawyer-cloud.iml" filepath="$PROJECT_DIR$/j-lawyer-cloud/j-lawyer-cloud.iml" />
+      <module fileurl="file://$PROJECT_DIR$/j-lawyer-cloud/j-lawyer-cloud (1).iml" filepath="$PROJECT_DIR$/j-lawyer-cloud/j-lawyer-cloud (1).iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/j-lawyer-org.iml" filepath="$PROJECT_DIR$/.idea/j-lawyer-org.iml" />
+    </modules>
+  </component>
+</project>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/j-lawyer-io/j-lawyer-io.iml" filepath="$PROJECT_DIR$/j-lawyer-io/j-lawyer-io.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/j-lawyer-server.iml" filepath="$PROJECT_DIR$/.idea/j-lawyer-server.iml" />
+      <module fileurl="file://$PROJECT_DIR$/j-lawyer-server-ejb/src/j-lawyer-server-ejb.iml" filepath="$PROJECT_DIR$/j-lawyer-server-ejb/src/j-lawyer-server-ejb.iml" />
+      <module fileurl="file://$PROJECT_DIR$/j-lawyer-server-ejb/j-lawyer-server-ejb1.iml" filepath="$PROJECT_DIR$/j-lawyer-server-ejb/j-lawyer-server-ejb1.iml" />
+      <module fileurl="file://$PROJECT_DIR$/j-lawyer-server-io/j-lawyer-server-io.iml" filepath="$PROJECT_DIR$/j-lawyer-server-io/j-lawyer-server-io.iml" />
+      <module fileurl="file://$PROJECT_DIR$/j-lawyer-server-war/j-lawyer-server-war.iml" filepath="$PROJECT_DIR$/j-lawyer-server-war/j-lawyer-server-war.iml" />
+      <module fileurl="file://$PROJECT_DIR$/j-lawyer-server-war/src/j-lawyer-server-war1.iml" filepath="$PROJECT_DIR$/j-lawyer-server-war/src/j-lawyer-server-war1.iml" />
+    </modules>
+  </component>
+</project>

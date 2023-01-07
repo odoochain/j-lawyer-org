@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="j-lawyer-server-entities">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/j-lawyer-io/build/j-lawyer-server-entities.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

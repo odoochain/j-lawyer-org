@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="jaxrs-analyzer">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/j-lawyer-io/tools/jaxrs-analyzer.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="j-lawyer-fax">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/dist/j-lawyer-fax.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

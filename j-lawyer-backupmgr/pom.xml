@@ -8,10 +8,14 @@
     <packaging>jar</packaging>
 
     <name>j-lawyer-backupmgr</name>
+    <description>数据库备份</description>
 
     <properties>
+        <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.source>11</maven.compiler.source>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <mainClass>org.jlawyer.backupmgr.BackupManagerLauncher</mainClass>
+        <runfx.args>-jar "${project.build.directory}/${project.build.finalName}.jar"</runfx.args>
     </properties>
 
     <organization>
@@ -40,56 +44,92 @@
                     </execution>
                 </executions>
             </plugin>
+<!--            <plugin>-->
+<!--                <artifactId>maven-clean-plugin</artifactId>-->
+<!--                <version>2.6.1</version>-->
+<!--                <configuration>-->
+<!--                    <skip>true</skip>-->
+<!--                </configuration>-->
+<!--            </plugin>-->
+<!--            <plugin>-->
+<!--                <groupId>org.codehaus.mojo</groupId>-->
+<!--                <artifactId>exec-maven-plugin</artifactId>-->
+<!--                <version>3.0.0</version>-->
+<!--                <executions>-->
+<!--                    <execution>-->
+<!--                        <id>unpack-dependencies</id>-->
+<!--                        <phase>package</phase>-->
+<!--                        <goals>-->
+<!--                            <goal>exec</goal>-->
+<!--                        </goals>-->
+<!--                        <configuration>-->
+<!--                            <executable>${java.home}/../bin/javafxpackager</executable>-->
+<!--                            <arguments>-->
+<!--                                <argument>-createjar</argument>-->
+<!--                                <argument>-nocss2bin</argument>-->
+<!--                                <argument>-appclass</argument>-->
+<!--                                <argument>${mainClass}</argument>-->
+<!--                                <argument>-srcdir</argument>-->
+<!--                                <argument>${project.build.directory}/classes</argument>-->
+<!--                                <argument>-outdir</argument>-->
+<!--                                <argument>${project.build.directory}</argument>-->
+<!--                                <argument>-outfile</argument>-->
+<!--                                <argument>${project.build.finalName}.jar</argument>-->
+<!--                            </arguments>-->
+<!--                        </configuration>-->
+<!--                    </execution>-->
+<!--                    <execution>-->
+<!--                        <id>default-cli</id>-->
+<!--                        <goals>-->
+<!--                            <goal>exec</goal>                            -->
+<!--                        </goals>-->
+<!--                        <configuration>-->
+<!--                            <executable>${java.home}/bin/java</executable>-->
+<!--                            <commandlineArgs>${runfx.args}</commandlineArgs>-->
+<!--                        </configuration>-->
+<!--                    </execution>-->
+<!--                </executions>  -->
+<!--            </plugin>-->
             <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>1.2.1</version>
+                <groupId>io.github.fvarrui</groupId>
+                <artifactId>javapackager</artifactId>
+                <version>1.3.1-SNAPSHOT</version>
                 <executions>
                     <execution>
-                        <id>unpack-dependencies</id>
-                        
                         <phase>package</phase>
                         <goals>
-                            <goal>exec</goal>
+                            <goal>package</goal>
                         </goals>
                         <configuration>
-                            <executable>${java.home}/../bin/javafxpackager</executable>
-                            <arguments>
-                                <argument>-createjar</argument>
-                                <argument>-nocss2bin</argument>
-                                <argument>-appclass</argument>
-                                <argument>${mainClass}</argument>
-                                <argument>-srcdir</argument>
-                                <argument>${project.build.directory}/classes</argument>
-                                <argument>-outdir</argument>
-                                <argument>${project.build.directory}</argument>
-                                <argument>-outfile</argument>
-                                <argument>${project.build.finalName}.jar</argument>
-                            </arguments>
+                            <!-- mandatory -->
+                            <mainClass>org.jlawyer.backupmgr.BackupManagerLauncher</mainClass>
+                            <!-- optional -->
+                            <bundleJre>false</bundleJre>
+                            <generateInstaller>true</generateInstaller>
+                            <administratorRequired>false</administratorRequired>
+                            <platform>windows</platform>
+<!--                            <additionalResources>-->
+<!--                                <additionalResource>balcon</additionalResource>-->
+<!--                                <additionalResource>ffmpeg</additionalResource>-->
+<!--                            </additionalResources>-->
+                            <!--							<winConfig>...</winConfig>-->
                         </configuration>
                     </execution>
-                    <execution>
-                        <id>default-cli</id>
-                        <goals>
-                            <goal>exec</goal>                            
-                        </goals>
-                        <configuration>
-                            <executable>${java.home}/bin/java</executable>
-                            <commandlineArgs>${runfx.args}</commandlineArgs>
-                        </configuration>
-                    </execution>
-                </executions>  
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.1</version>
+                <version>3.8.1</version>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
-                    <compilerArguments>
-                        <bootclasspath>${sun.boot.class.path}${path.separator}${java.home}/lib/jfxrt.jar</bootclasspath>
-                    </compilerArguments>
+                    <source>12</source>
+                    <target>12</target>
+                    <release>12</release>
+                    <executable>javac12</executable>
+                    <encoding>UTF-8</encoding>
+<!--                    <compilerArguments>-->
+<!--                        <bootclasspath>${sun.boot.class.path}${path.separator}${java.home}/lib/jfxrt.jar</bootclasspath>-->
+<!--                    </compilerArguments>-->
                 </configuration>
             </plugin>
             <plugin>
@@ -104,6 +144,26 @@
             </plugin>
         </plugins>
     </build>
+<!--    <pluginRepositories>-->
+<!--        <pluginRepository>-->
+<!--            <id>sonatype-public-repository</id>-->
+<!--            <url>https://oss.sonatype.org/content/groups/public</url>-->
+<!--            <snapshots>-->
+<!--                <enabled>true</enabled>-->
+<!--            </snapshots>-->
+<!--            <releases>-->
+<!--                <enabled>true</enabled>-->
+<!--            </releases>-->
+<!--        </pluginRepository>-->
+<!--&lt;!&ndash;        		<pluginRepository>&ndash;&gt;-->
+<!--&lt;!&ndash;        			<id>javapackager-repo</id>&ndash;&gt;-->
+<!--&lt;!&ndash;        			<url>https://github.com/daocalendar/JavaPackager/raw/master/releases</url>&ndash;&gt;-->
+<!--&lt;!&ndash;        			<releases>&ndash;&gt;-->
+<!--&lt;!&ndash;        				<enabled>true</enabled>&ndash;&gt;-->
+<!--&lt;!&ndash;        			</releases>&ndash;&gt;-->
+<!--&lt;!&ndash;        		</pluginRepository>&ndash;&gt;-->
+<!--    </pluginRepositories>-->
+
     <dependencies>
         <dependency>
             <groupId>junit</groupId>
@@ -126,6 +186,16 @@
             <groupId>net.lingala.zip4j</groupId>
             <artifactId>zip4j</artifactId>
             <version>1.3.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>11.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>11.0.1</version>
         </dependency>
     </dependencies>
 </project>

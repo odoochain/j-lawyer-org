@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="j-lawyer-io-common">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/build/lib/j-lawyer-io-common.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

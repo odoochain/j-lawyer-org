@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="jboss-jaxrs-api_2.0_spec-1.0.0.Final1">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/j-lawyer-io/lib/jboss-jaxrs-api_2.0_spec-1.0.0.Final.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

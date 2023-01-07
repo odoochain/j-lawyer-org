@@ -663,7 +663,7 @@
  */
 package com.jdimension.jlawyer.server.modules;
 
-import com.sun.glass.events.KeyEvent;
+import java.awt.event.KeyEvent;
 import java.awt.Image;
 import java.util.ArrayList;
 import java.util.Enumeration;

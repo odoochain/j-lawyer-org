@@ -1,0 +1,27 @@
+<component name="libraryTable">
+  <library name="lib">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/xmlrpc-common-3.1.3.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/jsch-0.1.54.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/joda-time-2.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/xmlrpc-server-3.1.3.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/jcifs-1.3.18.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/commons-vfs2-2.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/commons-lang3-3.5.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/tika-app-1.22.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/lucene-core-4.7.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/lucene-queryparser-4.7.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/commons-logging-1.2.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/commons-net-3.5.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/lucene-analyzers-common-4.7.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/ws-commons-util-1.0.2.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/lucene-queries-4.7.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/lucene-memory-4.7.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/xmlrpc-client-3.1.3.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/jollyday-0.4.7.jar!/" />
+      <root url="jar://$PROJECT_DIR$/j-lawyer-server-ejb/lib/lucene-highlighter-4.7.0.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

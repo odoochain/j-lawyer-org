@@ -1,0 +1,15 @@
+TYPE=VIEW
+query=select `jlawyerdb`.`security_users`.`principalId` AS `principalId`,`jlawyerdb`.`security_users`.`password` AS `password`,`jlawyerdb`.`security_users`.`lawyer` AS `lawyer`,`jlawyerdb`.`security_users`.`countryCode` AS `countryCode`,`jlawyerdb`.`security_users`.`areaCode` AS `areaCode`,`jlawyerdb`.`security_users`.`emailAddress` AS `emailAddress`,`jlawyerdb`.`security_users`.`emailInType` AS `emailInType`,`jlawyerdb`.`security_users`.`emailInServer` AS `emailInServer`,`jlawyerdb`.`security_users`.`emailInUser` AS `emailInUser`,`jlawyerdb`.`security_users`.`emailInPwd` AS `emailInPwd`,`jlawyerdb`.`security_users`.`emailOutServer` AS `emailOutServer`,`jlawyerdb`.`security_users`.`emailOutUser` AS `emailOutUser`,`jlawyerdb`.`security_users`.`emailOutPwd` AS `emailOutPwd`,`jlawyerdb`.`security_users`.`emailSenderName` AS `emailSenderName`,`jlawyerdb`.`security_users`.`emailSignature` AS `emailSignature`,`jlawyerdb`.`security_users`.`emailInSsl` AS `emailInSsl`,`jlawyerdb`.`security_users`.`emailOutSsl` AS `emailOutSsl`,`jlawyerdb`.`security_users`.`emailStartTls` AS `emailStartTls`,`jlawyerdb`.`security_users`.`settings` AS `settings`,`jlawyerdb`.`security_users`.`beaCertificate` AS `beaCertificate`,`jlawyerdb`.`security_users`.`beaCertificateAutoLogin` AS `beaCertificateAutoLogin`,`jlawyerdb`.`security_users`.`beaCertificatePassword` AS `beaCertificatePassword` from `jlawyerdb`.`security_users`
+md5=87d8b8a0ddcbab914e47550cff803511
+updatable=1
+algorithm=0
+definer_user=root
+definer_host=localhost
+suid=2
+with_check_option=0
+timestamp=2020-10-29 19:51:30
+create-version=1
+source=SELECT * FROM security_users
+client_cs_name=utf8
+connection_cl_name=utf8_general_ci
+view_body_utf8=select `jlawyerdb`.`security_users`.`principalId` AS `principalId`,`jlawyerdb`.`security_users`.`password` AS `password`,`jlawyerdb`.`security_users`.`lawyer` AS `lawyer`,`jlawyerdb`.`security_users`.`countryCode` AS `countryCode`,`jlawyerdb`.`security_users`.`areaCode` AS `areaCode`,`jlawyerdb`.`security_users`.`emailAddress` AS `emailAddress`,`jlawyerdb`.`security_users`.`emailInType` AS `emailInType`,`jlawyerdb`.`security_users`.`emailInServer` AS `emailInServer`,`jlawyerdb`.`security_users`.`emailInUser` AS `emailInUser`,`jlawyerdb`.`security_users`.`emailInPwd` AS `emailInPwd`,`jlawyerdb`.`security_users`.`emailOutServer` AS `emailOutServer`,`jlawyerdb`.`security_users`.`emailOutUser` AS `emailOutUser`,`jlawyerdb`.`security_users`.`emailOutPwd` AS `emailOutPwd`,`jlawyerdb`.`security_users`.`emailSenderName` AS `emailSenderName`,`jlawyerdb`.`security_users`.`emailSignature` AS `emailSignature`,`jlawyerdb`.`security_users`.`emailInSsl` AS `emailInSsl`,`jlawyerdb`.`security_users`.`emailOutSsl` AS `emailOutSsl`,`jlawyerdb`.`security_users`.`emailStartTls` AS `emailStartTls`,`jlawyerdb`.`security_users`.`settings` AS `settings`,`jlawyerdb`.`security_users`.`beaCertificate` AS `beaCertificate`,`jlawyerdb`.`security_users`.`beaCertificateAutoLogin` AS `beaCertificateAutoLogin`,`jlawyerdb`.`security_users`.`beaCertificatePassword` AS `beaCertificatePassword` from `jlawyerdb`.`security_users`

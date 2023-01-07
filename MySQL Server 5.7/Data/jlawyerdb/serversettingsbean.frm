@@ -1,0 +1,15 @@
+TYPE=VIEW
+query=select `jlawyerdb`.`server_settings`.`settingKey` AS `settingKey`,`jlawyerdb`.`server_settings`.`settingValue` AS `settingValue` from `jlawyerdb`.`server_settings`
+md5=18d9e528a33e3d7d708d27df45d68779
+updatable=1
+algorithm=0
+definer_user=root
+definer_host=localhost
+suid=2
+with_check_option=0
+timestamp=2020-10-29 19:51:30
+create-version=1
+source=SELECT * FROM server_settings
+client_cs_name=utf8
+connection_cl_name=utf8_general_ci
+view_body_utf8=select `jlawyerdb`.`server_settings`.`settingKey` AS `settingKey`,`jlawyerdb`.`server_settings`.`settingValue` AS `settingValue` from `jlawyerdb`.`server_settings`

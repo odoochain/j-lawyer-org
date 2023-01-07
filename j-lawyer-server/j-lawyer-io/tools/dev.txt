@@ -1,0 +1,1 @@
+https://github.com/DaoCalendar/jaxrs-analyzer  重新编译
